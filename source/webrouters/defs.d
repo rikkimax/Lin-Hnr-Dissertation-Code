@@ -34,12 +34,50 @@ interface IWebSite {
     const(WebsiteAddress[]) addresses();
 }
 
+struct WebSiteAddressPort {
+	this(uint port) {
+		isSpecial = false;
+		this.value = port;
+	}
+
+	this(Special special) {
+		this.special = special;
+	}
+
+	bool isSpecial = true;
+
+	union {
+		uint value;
+		Special special;
+	}
+
+	enum Special {
+		Error,
+		CatchAll
+	}
+
+	string toString() const {
+		import std.conv : text;
+
+		if (isSpecial)
+			return special.text;
+		else
+			return value.text;
+	}
+}
+
 struct WebsiteAddress {
     dstring hostname;
-    uint port;
+	WebSiteAddressPort port;
 
     bool supportsSSL;
     bool requiresSSL;
+
+	string toString() const {
+		import std.conv : text;
+		return hostname.text ~ ":" ~ port.toString ~ " " ~ 
+			(supportsSSL ? (requiresSSL ? "[require SSL]" : "[SSL]") : "");
+	}
 }
 
 struct Route {
