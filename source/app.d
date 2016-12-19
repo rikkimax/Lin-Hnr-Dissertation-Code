@@ -1,5 +1,6 @@
 import std.stdio;
+import webrouters.benchmark;
 
 void main() {
-	writeln("Edit source/app.d to start your project.");
+	writeln(createBenchMarks(20, 5, 5));
 }

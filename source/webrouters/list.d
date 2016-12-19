@@ -29,11 +29,11 @@ final class ListRouter : IRouter {
 		import std.algorithm : multiSort;
 
 		multiSort!(
-			"(a.code == 404 || a.code == 500) && b.code == 200",
-			"!(a.code == 404 || a.code == 500) && a.code < b.code",
-			(Route a, Route b){ return isRouteLess(a.path, b.path); },
-			"a.website.addresses < b.website.addresses",
-			)(allRoutes);
+			isRouteLess,
+			isAddressesLess, 
+			"a.code < b.code",
+			"(!a.requiresSSL && b.requiresSSL) || (a.requiresSSL && b.requiresSSL)"
+		)(allRoutes);
 	}
 
 	Nullable!Route run(RouterRequest routeToFind) {
@@ -94,41 +94,137 @@ bool isRouteMatch(dstring from, dstring to) {
 	return true;
 }
 
-bool isRouteLess(dstring from, dstring to) {
+bool isAddressesLess(ref Route a, ref Route b) {
+	// should we go first?
+
+	auto from = a.website.addresses;
+	auto to = b.website.addresses;
+
+	if (from.length > to.length)
+		return false;
+	else if (from.length < to.length)
+		return true;
+	else {
+		// same length so lets check if they match
+
+		uint lessPort, morePort;
+		uint lessSupportsSSL, moreSupportsSSL;
+		uint lessRequiresSSL, moreRequiresSSL;
+		uint lessHostname, moreHostname;
+
+		foreach(ref f; from) {
+			foreach(ref t; to) {
+				if (f.port.isSpecial && t.port.isSpecial) {
+					// inaction
+				} else if (f.port.isSpecial) {
+					lessPort++;
+				} else if (t.port.isSpecial) {
+					morePort++;
+				} else if (f.port.value < t.port.value)
+					lessPort++;
+				else
+					morePort++;
+
+				if (f.supportsSSL && t.supportsSSL) {
+					// inaction
+				} else if (f.supportsSSL && !t.supportsSSL)
+					lessSupportsSSL++;
+				else if (!f.supportsSSL && t.supportsSSL)
+					moreSupportsSSL++;
+				else {
+					// inaction
+				}
+
+				if (f.requiresSSL && t.requiresSSL) {
+					// inaction
+				} else if (f.requiresSSL && !t.requiresSSL)
+					lessRequiresSSL++;
+				else if (!f.requiresSSL && t.requiresSSL)
+					moreRequiresSSL++;
+				else {
+					// inaction
+				}
+
+				if (f.hostname == t.hostname) {
+					// inaction
+				} else if (f.hostname < t.hostname)
+					lessHostname++;
+				else if (f.hostname > t.hostname)
+					moreHostname++;
+
+				if (f.hostname[0] == '*' && t.hostname[0] == '*') {
+					//inaction
+				} else if (f.hostname[0] == '*')
+					moreHostname++;
+				else if (t.hostname[0] == '*')
+					lessHostname++;
+				else {
+					// inaction
+				}
+
+			}
+		}
+
+		return lessPort < morePort &&
+			lessRequiresSSL < lessRequiresSSL &&
+			lessSupportsSSL < moreSupportsSSL &&
+			lessHostname < moreHostname;
+	}
+}
+
+bool isRouteLess(ref Route a, ref Route b)
+out(v) {
+	import std.stdio;
+	writeln("!! ", v);
+	writeln;
+} body {
 	import std.algorithm : splitter;
+	import std.range : zip;
 	import std.string : indexOf;
+
+	auto from = a.path;
+	auto to = b.path;
 
 	// TRUE= /abc versus /abc/def
 	// FALSE= /abc/* versus /abc/def
 
-	dstring from2 = from;
+	if (from == to)
+		return false;
 
-	foreach(part; from.splitter('/')) {
-		if (from2.length > part.length)
-			from2 = from2[part.length + 1 .. $];
-		else
-			from2 = from2[part.length .. $];
+	import std.stdio;
+	writeln(from, "\t", to);
 
-		if (part == "*"d) {
-			return to.indexOf('/') == -1 && ((to.length > 0 && to[0] != '*') || to.length == 0);
-		} else if (part.length > 0 && part[0] == ':') {
-			ptrdiff_t index = to.indexOf('/');
-			if (index == -1) {
-				index = to.indexOf('/');
-				return index > 0 || (index == -1 && (part < to));
-			} else if (to[1] == ':')
-				to = to[index + 1 .. $];
-			else
-				return true;
-		} else if (part.length <= to.length && part == to[0 .. part.length]) {
-			to = to[part.length .. $];
-			if (to.length > 0 && to[0] == '/')
-				to = to[1 .. $];
-		} else
-			return from2 < to;
+	if (from[$-1] == '*' && to[$-1] == '*')
+		return from.length < to.length;
+	else if (from[$-1] == '*')
+		return false;
+	else if (to[$-1] == '*')
+		return true;
+	else {
+		// inaction
+	}
+
+	foreach(parta, partb; zip(from.splitter('/'), to.splitter('/'))) {
+		writeln(":: ", parta, "\t", partb);
+
+		if (parta is null) {
+			return false;
+		} else if (partb is null)
+			return true;
+
+		if (from[$-1] == '*' && to[$-1] == '*') {
+			return false;
+		} else if (parta[0] == ':' || partb[0] == ':') {
+			if (parta[0] != ':')
+				return false;
+		} else if (parta == partb) {
+			// do nothing
+		} else {
+			return false;
+		}
 	}
 	
-	return from2 < to;
+	return true;
 }
 
 unittest {
