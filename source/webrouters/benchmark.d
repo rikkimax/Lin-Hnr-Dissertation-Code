@@ -41,6 +41,11 @@ BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariable
 	InternalEntry[] partsOrder;
 	partsOrder.length = countEntries;
 
+	uint[] partTypeConstants, partTypeVariables, partTypeCatchAlls;
+	partTypeConstants.length = maxParts * 2;
+	partTypeVariables.length = maxParts * 2;
+	partTypeCatchAlls.length = maxParts * 2;
+
 	foreach(i, ref entry; partsOrder) {
 		double temp = segmoidForX(countEntries / (i + 1));
 
@@ -77,12 +82,28 @@ BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariable
 				}
 			}
 		}
+
+		partTypeCatchAlls[numConstants + numVariables]++;
+		foreach(j, o; entry.order) {
+			if (o < numConstants) {
+				partTypeConstants[j]++;
+			} else {
+				partTypeVariables[j]++;
+			}
+		}
 	}
 
 	import std.stdio;
 	writeln(partsOrder);
 
+	// Now we have to generate a tree graph that describes the uniqueness of each constant, variable and catch all
+	InternalTreeEntry root;
 
+	foreach(ref part; partsOrder) {
+		processPartOrderTree(root, part, 0);
+	}
+
+	writeln(root.toString);
 
 	return ret;
 }
@@ -94,6 +115,115 @@ private {
 		uint numConstants, numVariables;
 		uint[] order;
 		bool haveCatchAll;
+	}
+
+	struct InternalTreeEntry {
+		InternalTreeEntry* parent;
+
+		InternalTreeEntry[] children;
+		string constant;
+		bool haveCatchAll, haveVariable;
+
+		string toString() {
+			string ret = "InternalTreeEntry(";
+			ret ~= `"` ~ constant ~ `"`;
+			ret ~= haveVariable ? ":" : "-";
+			ret ~= haveCatchAll ? "*" : "_";
+			ret ~= " [";
+
+			foreach(child; children) {
+				ret ~= child.toString;
+				ret ~= ", ";
+			}
+
+			return ret ~ "])";
+		}
+	}
+
+	void processPartOrderTree(ref InternalTreeEntry parent, ref InternalEntry entry, uint offset) {
+		import std.random : uniform;
+
+		if (entry.order.length > offset) {
+			if (entry.order[offset] < entry.numConstants) {
+				if (parent.children.length == 0) {
+					parent.children ~= InternalTreeEntry(&parent);
+					processPartOrderTree(parent.children[0], entry, offset+1);
+				} else {
+					size_t idx = uniform(0, parent.children.length + 1);
+
+					if (idx == parent.children.length) {
+						parent.children ~= InternalTreeEntry(&parent);
+						processPartOrderTree(parent.children[$-1], entry, offset+1);
+					} else {
+						processPartOrderTree(parent.children[idx], entry, offset+1);
+					}
+				}
+			} else {
+				// ugh oh variable!
+
+				if (parent.haveVariable) {
+					// ok already exists, we've got to go up the tree and make this leaf "unique"
+					makePartOrderTreeUnique(parent, entry, offset);
+				} else {
+					parent.haveVariable = true;
+
+					if (entry.haveCatchAll || (entry.order.length > offset+1 && entry.order[offset+1] >= entry.numConstants)) {
+						// ok so a variable
+						// we've got to create a new node for it
+						// and only then process it
+						parent.children ~= InternalTreeEntry(&parent);
+						processPartOrderTree(parent.children[0], entry, offset+1);
+					}
+				}
+			}
+		} else if (entry.haveCatchAll) {
+			if (parent.haveCatchAll) {
+				// ok already exists, we've got to go up the tree and make this leaf "unique"
+				makePartOrderTreeUnique(parent, entry, offset);
+			} else {
+				parent.haveCatchAll = true;
+			}
+		}
+	}
+
+	void makePartOrderTreeUnique(ref InternalTreeEntry parent, ref InternalEntry entry, uint offset) {
+		// /cnst/:var/:var ➔ /cnst/:var/← ➔ /cnst/←/← ➔ /↓ ➔ /cnst2 ➔ /cnst2/:var ➔ /cnst2/:var/:var
+		// /cnst/* ➔ /cnst/← ➔ /↓ ➔ /cnst2 ➔ /cnst2/*
+
+		InternalTreeEntry* tempParent = parent.parent;
+
+		foreach_reverse(i; 0 .. offset-1) {
+			// basically we go up until we find a new parent to start creating from
+			// once we have done that, we execute processPartOrderTree again
+
+			// If we've executing this code that means that we're either a variable or a catch all
+			//  and it can't be added to this parent node :(
+			// To work around this we must evaluate each parent node out.
+			// Variables are ignored since they like catch alls are one add parts
+			//  however constant parts are equal opportunities, here we MUST add a new child node!
+			// From there we rebuild the tree and return from here.
+
+			if (entry.order[i] < entry.numConstants) {
+				// oh goody we found a constant!
+
+				// Now we could go do some walking of the tree graph.
+				// But who likes walking? We've done enough already.
+				// So let's forget that crazy idea and just dump it into
+				//  its own new branch of the graph.
+
+				tempParent.children ~= InternalTreeEntry(&parent);
+				makePartOrderTreeUnique(*tempParent, entry, i);
+				return;
+			}
+
+			// oh great... next please :(
+
+			tempParent = tempParent.parent;
+			if (tempParent is null)
+				return; // oh stuff this it doesn't have to be exact
+		}
+
+		// what ever, shouldn't happen and who cares if it does
 	}
 
 	static this() {
