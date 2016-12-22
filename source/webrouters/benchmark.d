@@ -103,6 +103,14 @@ BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariable
 		processPartOrderTree(root, part, 0);
 	}
 
+	foreach(ref child; root.children) {
+		fillText(child);
+	}
+
+
+	ret.items.length = countEntries;
+
+	// TODO: flatten the tree graph into a BenchMarkItems
 	writeln(root.toString);
 
 	return ret;
@@ -122,21 +130,23 @@ private {
 
 		InternalTreeEntry[] children;
 		string constant;
-		bool haveCatchAll, haveVariable;
+		bool haveCatchAll;
+		int haveVariable;
 
-		string toString() {
-			string ret = "InternalTreeEntry(";
-			ret ~= `"` ~ constant ~ `"`;
-			ret ~= haveVariable ? ":" : "-";
-			ret ~= haveCatchAll ? "*" : "_";
-			ret ~= " [";
+		string toString(string prepend="") {
+			string newprepend = prepend ~ "    ";
+
+			string ret = prepend ~ "InternalTreeEntry(\n";
+			ret ~= newprepend ~ `"` ~ constant ~ `"`;
+			ret ~= haveVariable >= 0 ? ":" : "";
+			ret ~= haveCatchAll ? "*" : "";
+			ret ~= " [\n";
 
 			foreach(child; children) {
-				ret ~= child.toString;
-				ret ~= ", ";
+				ret ~= child.toString(newprepend);
 			}
 
-			return ret ~ "])";
+			return ret ~ prepend ~ "])\n";
 		}
 	}
 
@@ -161,11 +171,11 @@ private {
 			} else {
 				// ugh oh variable!
 
-				if (parent.haveVariable) {
+				if (parent.haveVariable >= 0) {
 					// ok already exists, we've got to go up the tree and make this leaf "unique"
 					makePartOrderTreeUnique(parent, entry, offset);
 				} else {
-					parent.haveVariable = true;
+					parent.haveVariable = parent.children.length;
 
 					if (entry.haveCatchAll || (entry.order.length > offset+1 && entry.order[offset+1] >= entry.numConstants)) {
 						// ok so a variable
@@ -224,6 +234,16 @@ private {
 		}
 
 		// what ever, shouldn't happen and who cares if it does
+	}
+
+	void fillText(ref InternalTreeEntry parent) {
+		import std.random : uniform;
+
+		parent.constant = words[uniform(0, words.length)];
+
+		foreach(ref child; parent.children) {
+			fillText(child);
+		}
 	}
 
 	static this() {
