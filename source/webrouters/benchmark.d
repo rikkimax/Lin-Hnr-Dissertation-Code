@@ -93,24 +93,44 @@ BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariable
 		}
 	}
 
-	import std.stdio;
-	writeln(partsOrder);
-
 	// Now we have to generate a tree graph that describes the uniqueness of each constant, variable and catch all
+	//  naturally we also must specify if there an element is also an end point, but only for constant and variable.
+	// While we're at it, we'll do some flattening
+
 	InternalTreeEntry root;
 
 	foreach(ref part; partsOrder) {
-		processPartOrderTree(root, part, 0);
+		processPartOrderTree(&root, part, 0);
+	}
+
+	uint offsetForEntry;
+	ret.items.length = countEntries;
+
+	root.fillText;
+
+	dchar[] buffer;
+	buffer.length = 1024;
+	buffer[] = '_';
+	buffer[0] = '/';
+
+	import std.utf : byDchar, count;
+	size_t tL=1;
+	foreach(c; root.constant.byDchar) {
+		buffer[tL] = c;
+		tL++;
 	}
 
 	foreach(ref child; root.children) {
-		fillText(child);
+		if (child.haveVariable >= 0) {
+			flattenTree(&child, offsetForEntry, ret.items, buffer, tL);
+		} else {
+			flattenTree(&child, offsetForEntry, ret.items, buffer, 0);
+		}
 	}
 
-
-	ret.items.length = countEntries;
-
 	// TODO: flatten the tree graph into a BenchMarkItems
+	import std.stdio;
+	writeln(partsOrder);
 	writeln(root.toString);
 
 	return ret;
@@ -129,17 +149,29 @@ private {
 		InternalTreeEntry* parent;
 
 		InternalTreeEntry[] children;
-		string constant;
-		bool haveCatchAll;
-		int haveVariable;
+		string constant, varName;
+		bool haveCatchAll, isAnEnd;
+		int haveVariable=-1;
 
 		string toString(string prepend="") {
+			import std.conv :text;
 			string newprepend = prepend ~ "    ";
 
 			string ret = prepend ~ "InternalTreeEntry(\n";
-			ret ~= newprepend ~ `"` ~ constant ~ `"`;
+
+			if (haveVariable >= 0 && children.length > 1) {
+				ret ~= newprepend ~ `constant "` ~ constant ~ `" var(` ~ haveVariable.text ~ `)"` ~ varName ~ `"`;
+			} else if (haveVariable >= 0) {
+				ret ~= newprepend ~ `var(` ~ haveVariable.text ~ `)"` ~ varName ~ `"`;
+			} else if (children.length > 0) {
+				ret ~= newprepend ~ `constant "` ~ constant ~ `"`;
+			} else {
+				ret ~= newprepend;
+			}
+
 			ret ~= haveVariable >= 0 ? ":" : "";
 			ret ~= haveCatchAll ? "*" : "";
+			ret ~= (haveCatchAll || isAnEnd) ? "←|" : "";
 			ret ~= " [\n";
 
 			foreach(child; children) {
@@ -150,22 +182,26 @@ private {
 		}
 	}
 
-	void processPartOrderTree(ref InternalTreeEntry parent, ref InternalEntry entry, uint offset) {
+	void processPartOrderTree(InternalTreeEntry* parent, ref InternalEntry entry, uint offset) {
 		import std.random : uniform;
+
+		if (entry.order.length <= offset) {
+			parent.isAnEnd = true;
+		}
 
 		if (entry.order.length > offset) {
 			if (entry.order[offset] < entry.numConstants) {
 				if (parent.children.length == 0) {
-					parent.children ~= InternalTreeEntry(&parent);
-					processPartOrderTree(parent.children[0], entry, offset+1);
+					parent.children ~= InternalTreeEntry(parent);
+					processPartOrderTree(&parent.children[0], entry, offset+1);
 				} else {
 					size_t idx = uniform(0, parent.children.length + 1);
 
 					if (idx == parent.children.length) {
-						parent.children ~= InternalTreeEntry(&parent);
-						processPartOrderTree(parent.children[$-1], entry, offset+1);
+						parent.children ~= InternalTreeEntry(parent);
+						processPartOrderTree(&parent.children[$-1], entry, offset+1);
 					} else {
-						processPartOrderTree(parent.children[idx], entry, offset+1);
+						processPartOrderTree(&parent.children[idx], entry, offset+1);
 					}
 				}
 			} else {
@@ -175,15 +211,11 @@ private {
 					// ok already exists, we've got to go up the tree and make this leaf "unique"
 					makePartOrderTreeUnique(parent, entry, offset);
 				} else {
+					// ok so a variable
+					// we've got to create a new node for it
 					parent.haveVariable = parent.children.length;
-
-					if (entry.haveCatchAll || (entry.order.length > offset+1 && entry.order[offset+1] >= entry.numConstants)) {
-						// ok so a variable
-						// we've got to create a new node for it
-						// and only then process it
-						parent.children ~= InternalTreeEntry(&parent);
-						processPartOrderTree(parent.children[0], entry, offset+1);
-					}
+					parent.children ~= InternalTreeEntry(parent);
+					processPartOrderTree(&parent.children[$-1], entry, offset+1);
 				}
 			}
 		} else if (entry.haveCatchAll) {
@@ -196,13 +228,13 @@ private {
 		}
 	}
 
-	void makePartOrderTreeUnique(ref InternalTreeEntry parent, ref InternalEntry entry, uint offset) {
+	void makePartOrderTreeUnique(InternalTreeEntry* parent, ref InternalEntry entry, uint offset) {
 		// /cnst/:var/:var ➔ /cnst/:var/← ➔ /cnst/←/← ➔ /↓ ➔ /cnst2 ➔ /cnst2/:var ➔ /cnst2/:var/:var
 		// /cnst/* ➔ /cnst/← ➔ /↓ ➔ /cnst2 ➔ /cnst2/*
 
 		InternalTreeEntry* tempParent = parent.parent;
 
-		foreach_reverse(i; 0 .. offset-1) {
+		foreach_reverse(i; 0 .. offset) {
 			// basically we go up until we find a new parent to start creating from
 			// once we have done that, we execute processPartOrderTree again
 
@@ -221,8 +253,8 @@ private {
 				// So let's forget that crazy idea and just dump it into
 				//  its own new branch of the graph.
 
-				tempParent.children ~= InternalTreeEntry(&parent);
-				makePartOrderTreeUnique(*tempParent, entry, i);
+				tempParent.children ~= InternalTreeEntry(parent);
+				processPartOrderTree(&tempParent.children[$-1], entry, i);
 				return;
 			}
 
@@ -236,19 +268,80 @@ private {
 		// what ever, shouldn't happen and who cares if it does
 	}
 
-	void fillText(ref InternalTreeEntry parent) {
+	void fillText(ref InternalTreeEntry entry) {
 		import std.random : uniform;
 
-		parent.constant = words[uniform(0, words.length)];
+		if (entry.haveVariable >= 0) {
+			entry.varName = words[uniform(0, words.length)];
+		}
+		
+		entry.constant = words[uniform(0, words.length)];
 
-		foreach(ref child; parent.children) {
+		foreach(ref child; entry.children) {
 			fillText(child);
+		}
+	}
+
+	void flattenTree(InternalTreeEntry* parent, ref uint offsetForEntry, BenchMarkItem[] items, dchar[] buffer, uint offset) {
+		import std.utf : count, byDchar;
+
+		uint endLength;
+		if (parent.haveVariable >= 0) {
+			// variable
+
+			uint len = parent.varName.count;
+			endLength = len + 2;
+			
+			buffer[offset++] = '/';
+			buffer[offset++] = ':';
+			foreach(c; parent.varName.byDchar) {
+				buffer[offset++] = c;
+			}
+			
+			flattenTree(&parent.children[parent.haveVariable], offsetForEntry, items, buffer, offset);
+			offset -= endLength;
+		}
+		if (parent.haveCatchAll) {
+			// catch all
+
+			buffer[offset .. offset + 2] = "/*"d;
+			offset += 2;
+			
+			endLength = 2;
+		} else if (!(parent.children.length == 0 && (parent.isAnEnd || parent.haveCatchAll))) {
+			// constant
+
+			uint len = parent.constant.count;
+			endLength = len + 1;
+
+			buffer[offset++] = '/';
+			foreach(c; parent.constant.byDchar) {
+				buffer[offset++] = c;
+			}
+
+			uint i;
+			foreach(ref child; parent.children) {
+				if (i != parent.haveVariable)
+					flattenTree(&child, offsetForEntry, items, buffer, offset);
+				i++;
+			}
+		}
+
+		if (parent.isAnEnd || parent.haveCatchAll) {
+			dstring thispath = buffer[0 .. offset].idup;
+
+			// okay we need to start /saving/ the given route!
+
+			offset -= endLength;
+
+			import std.stdio;
+			writeln("END: {", thispath, "}");
 		}
 	}
 
 	static this() {
 		import std.file : readText;
-		import std.string : splitLines, indexOf;
+		import std.string : splitLines, indexOf, tr;
 
 		size_t realLength;
 		words.length = 50_000;
@@ -261,9 +354,9 @@ private {
 			}
 
 			if (index == -1) {
-				words[realLength] = line.dup;
+				words[realLength] = line.tr("'", "_");
 			} else {
-				words[realLength] = line[0 .. index].dup;
+				words[realLength] = line[0 .. index].tr("'", "_");
 			}
 
 			realLength++;
