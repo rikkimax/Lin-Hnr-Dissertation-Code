@@ -33,7 +33,7 @@ BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariable
 	uint[] partOrders;
 	partOrders.length = maxParts * 2;
 	foreach(i, ref v; partOrders)
-		v = i;
+		v = cast(uint)i;
 
 	uint[] allPartsOrderVars;
 	allPartsOrderVars.length = maxParts * countEntries;
@@ -49,8 +49,8 @@ BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariable
 	foreach(i, ref entry; partsOrder) {
 		double temp = segmoidForX(countEntries / (i + 1));
 
-		uint numParts = cast(size_t)ceil(temp * maxParts);
-		uint numVariables = cast(size_t)ceil(uniform01() < 0.3 ? (temp * maxVariables) : 0);
+		uint numParts = cast(uint)ceil(temp * maxParts);
+		uint numVariables = cast(uint)ceil(uniform01() < 0.3 ? (temp * maxVariables) : 0);
 		uint numConstants = numParts - numVariables;
 		bool haveCatchAll = segmoidForX(numParts / (numVariables + 1)) < 0.46812;
 
@@ -114,24 +114,32 @@ BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariable
 	buffer[0] = '/';
 
 	import std.utf : byDchar, count;
-	size_t tL=1;
+	uint tL=1;
 	foreach(c; root.constant.byDchar) {
 		buffer[tL] = c;
 		tL++;
 	}
 
+	// this adds the tree for route definitions into the return data
 	foreach(ref child; root.children) {
 		if (child.haveVariable >= 0) {
-			flattenTree(&child, offsetForEntry, ret.items, buffer, tL);
+			flattenTree(&child, offsetForEntry, ret, buffer, tL, true, 0, maxParts, false);
 		} else {
-			flattenTree(&child, offsetForEntry, ret.items, buffer, 0);
+			flattenTree(&child, offsetForEntry, ret, buffer, 0, true, 0, maxParts, false);
 		}
 	}
 
+	// now we've got to add test routes against the definition
+	// however this is some sort of "curve", definately not segmoid
+	// that determines how many get tested
+
+
+
+
 	// TODO: flatten the tree graph into a BenchMarkItems
 	import std.stdio;
-	writeln(partsOrder);
-	writeln(root.toString);
+	//writeln(partsOrder);
+	//writeln(root.toString);
 
 	return ret;
 }
@@ -213,7 +221,7 @@ private {
 				} else {
 					// ok so a variable
 					// we've got to create a new node for it
-					parent.haveVariable = parent.children.length;
+					parent.haveVariable = cast(uint)parent.children.length;
 					parent.children ~= InternalTreeEntry(parent);
 					processPartOrderTree(&parent.children[$-1], entry, offset+1);
 				}
@@ -282,36 +290,53 @@ private {
 		}
 	}
 
-	void flattenTree(InternalTreeEntry* parent, ref uint offsetForEntry, BenchMarkItem[] items, dchar[] buffer, uint offset) {
+	void flattenTree(InternalTreeEntry* parent, ref uint offsetForEntry, ref BenchMarkItems ret, dchar[] buffer,
+		uint offset, bool generateNewData, uint numPartsSoFar, uint maxNumParts, bool unconditionalGenerate) {
 		import std.utf : count, byDchar;
+
+		if (generateNewData && !unconditionalGenerate) {
+			import std.random : uniform01;
+			// this gives a chance to NOT to continue generation process to children
+			// but not only is there the curve based upon number of parts so far out of the total
+			// there is also a chance it will be included anyway
+			// keep in mind this occurs EVERY path part in the tree, so there is a good chance however slim
+			// to get not be generating after this
+			// so short paths get preference for test generation
+			generateNewData = curveForX(1-(maxNumParts / (cast(float)maxNumParts-numPartsSoFar))) >= 0.0618205187 ||
+				uniform01() <= 0.46812051;
+		}
 
 		uint endLength;
 		if (parent.haveVariable >= 0) {
 			// variable
 
-			uint len = parent.varName.count;
-			endLength = len + 2;
-			
-			buffer[offset++] = '/';
-			buffer[offset++] = ':';
-			foreach(c; parent.varName.byDchar) {
-				buffer[offset++] = c;
+			if (!generateNewData) {
+				uint len = cast(uint)parent.varName.count;
+				endLength = len + 2;
+
+				buffer[offset++] = '/';
+				buffer[offset++] = ':';
+				foreach(c; parent.varName.byDchar) {
+					buffer[offset++] = c;
+				}
+				
+				flattenTree(&parent.children[parent.haveVariable], offsetForEntry, ret, buffer, offset, generateNewData, numPartsSoFar + 1, maxNumParts, unconditionalGenerate);
+				offset -= endLength;
 			}
-			
-			flattenTree(&parent.children[parent.haveVariable], offsetForEntry, items, buffer, offset);
-			offset -= endLength;
 		}
 		if (parent.haveCatchAll) {
 			// catch all
 
-			buffer[offset .. offset + 2] = "/*"d;
-			offset += 2;
+			if (!generateNewData) {
+				buffer[offset .. offset + 2] = "/*"d;
+				offset += 2;
 			
-			endLength = 2;
+				endLength = 2;
+			}
 		} else if (!(parent.children.length == 0 && (parent.isAnEnd || parent.haveCatchAll))) {
 			// constant
 
-			uint len = parent.constant.count;
+			uint len = cast(uint)parent.constant.count;
 			endLength = len + 1;
 
 			buffer[offset++] = '/';
@@ -322,7 +347,7 @@ private {
 			uint i;
 			foreach(ref child; parent.children) {
 				if (i != parent.haveVariable)
-					flattenTree(&child, offsetForEntry, items, buffer, offset);
+					flattenTree(&child, offsetForEntry, ret, buffer, offset, generateNewData, numPartsSoFar + 1, maxNumParts, unconditionalGenerate);
 				i++;
 			}
 		}
@@ -334,8 +359,17 @@ private {
 
 			offset -= endLength;
 
-			import std.stdio;
-			writeln("END: {", thispath, "}");
+			if (generateNewData) {
+
+				import std.stdio;
+				writeln("END: generate {", thispath, "}");
+
+			} else {
+
+				import std.stdio;
+				writeln("END:          {", thispath, "}");
+
+			}
 		}
 	}
 
@@ -368,5 +402,12 @@ private {
 	double segmoidForX(double x) {
 		import std.math : sqrt, pow;
 		return (x-1.1f)/(2f * sqrt(1f+pow(x-1.2f, 2f)))/1f+0.4f;
+	}
+
+	double curveForX(double x) {
+		import std.math : E, pow;
+		import std.random : uniform01;
+		x += uniform01() * (1/8f);
+		return (pow(E, 0.68271 * x - (2967/4000)) / 6);
 	}
 }
