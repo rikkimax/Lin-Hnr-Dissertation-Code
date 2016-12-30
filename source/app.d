@@ -2,5 +2,8 @@ import std.stdio;
 import webrouters.benchmark;
 
 void main() {
-	writeln(createBenchMarks(20, 10, 8, 2));
+	writeln(";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
+	auto got = createBenchMarks(10_000_000, 20, 8, 20);
+	write(got);
+	writeln(";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
 }

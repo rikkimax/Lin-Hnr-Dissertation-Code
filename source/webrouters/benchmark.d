@@ -6,22 +6,46 @@ struct BenchMarkItems {
 
 	RouterRequest[] allRequests;
 	IWebSite[] allWebsites;
+
+	string toString() {
+		string ret;
+
+		foreach(item; items) {
+			ret ~= item.toString;
+		}
+
+		return ret;
+	}
 }
 
 struct BenchMarkItem {
 	Route route;
 	RouterRequest[] requests;
+
+	string toString() {
+		import std.conv : text;
+		string ret;
+
+		ret ~= "    |\n";
+		ret ~= "    |----| " ~ route.path.text ~ "\n";
+		foreach(request; requests) {
+			ret ~= "    |    |---- " ~ request.path.text ~ "\n";
+		}
+
+		return ret;
+	}
 }
 
 BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariables, uint maxTests) {
 	import std.math : ceil;
-	import std.random : uniform01, randomShuffle;
+	import std.random : uniform01, uniform, randomShuffle;
+	import std.algorithm : clamp;
 
 	// /part/:var/*
 	BenchMarkItems ret;
 
 	// number of entries that we will be doing
-	size_t countEntries = cast(size_t)ceil(segmoidForX(uniform01()) * maxEntries);
+	size_t countEntries = cast(size_t)ceil(segmoidForX(uniform01()).clamp(0f, 1f) * maxEntries);
 	ret.items.length = countEntries;
 
 	// Ok I'm kinda lazy for the next part.
@@ -104,8 +128,6 @@ BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariable
 	}
 
 	uint offsetForEntry;
-	ret.items.length = countEntries;
-
 	root.fillText;
 
 	dchar[] buffer;
@@ -125,24 +147,39 @@ BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariable
 	// this is a complicated process, that requires curves and random numbers!
 	foreach(ref child; root.children) {
 		if (child.haveVariable >= 0) {
-			flattenTree(&child, offsetForEntry, ret, buffer, tL, false, 0, maxParts, false, maxTests, false);
-			flattenTree(&child, offsetForEntry, ret, buffer, tL, true, 0, maxParts, false, maxTests, true);
+			flattenTreeSpec(&child, tL, buffer, ret, offsetForEntry, false, maxParts, 0);
 		} else {
-			flattenTree(&child, offsetForEntry, ret, buffer, 0, false, 0, maxParts, false, maxTests, false);
-			flattenTree(&child, offsetForEntry, ret, buffer, 0, true, 0, maxParts, false, maxTests, true);
+			flattenTreeSpec(&child, 0, buffer, ret, offsetForEntry, false, maxParts, 0);
 		}
 	}
 
+	ret.items.length = offsetForEntry;
+	countEntries = ret.items.length;
 
+	foreach(_; 0 .. uniform(1, maxTests+1)) {
+		offsetForEntry = 0;
+		tL=1;
 
+		foreach(c; root.constant.byDchar) {
+			buffer[tL] = c;
+			tL++;
+		}
 
-
+		foreach(ref child; root.children) {
+			if (child.haveVariable >= 0) {
+				flattenTreeSpec(&child, tL, buffer, ret, offsetForEntry, true, maxParts, 0);
+			} else {
+				flattenTreeSpec(&child, 0, buffer, ret, offsetForEntry, true, maxParts, 0);
+			}
+		}
+	}
 
 	// TODO: flatten the tree graph into a BenchMarkItems
 	import std.stdio;
 	//writeln(partsOrder);
 	//writeln(root.toString);
-
+	writeln(countEntries);
+	writeln("::::::::::::::::::::::::::::::::");
 	return ret;
 }
 
@@ -292,15 +329,14 @@ private {
 		}
 	}
 
-	void flattenTree(InternalTreeEntry* parent, ref uint offsetForEntry, ref BenchMarkItems ret, dchar[] buffer,
-		uint offset, bool generateNewData, uint numPartsSoFar, uint maxNumParts, bool unconditionalGenerate, uint maxTests,
-		bool forTests) {
+	void flattenTreeSpec(InternalTreeEntry* parent, uint offset, dchar[] buffer,
+		ref BenchMarkItems ret, ref uint offsetForEntry, bool forTests,
+		uint maxNumParts, uint numPartsSoFar) {
 		import std.utf : count, byDchar;
 		import std.random : uniform, uniform01;
-
-		uint testCount;
-
-		if (generateNewData && !unconditionalGenerate) {
+		
+		bool generateNewData;
+		if (forTests) {
 			// this gives a chance to NOT to continue generation process to children
 			// but not only is there the curve based upon number of parts so far out of the total
 			// there is also a chance it will be included anyway
@@ -309,114 +345,103 @@ private {
 			// so short paths get preference for test generation
 			generateNewData = curveForX(1-(maxNumParts / (cast(float)maxNumParts-numPartsSoFar))) >= 0.0618205187 ||
 				uniform01() <= 0.46812051;
-			testCount = cast(uint)uniform(1, maxTests+1);
 		}
-
-		if (forTests && !(generateNewData || unconditionalGenerate))
-			return;
-
-		uint endLength;
+		
+		if (parent.haveCatchAll) {
+			// catch all
+			uint offsetT = offset;
+			
+			if (generateNewData) {
+				uint numPartsToTest = cast(uint)(segmoidForX(maxNumParts / (numPartsSoFar + 1)) * ((maxNumParts + 2) - numPartsSoFar));
+				
+				foreach(_; 0 .. numPartsToTest) {
+					string word = words[uniform(0, words.length)];
+					
+					buffer[offsetT++] = '/';
+					foreach(c; word.byDchar) {
+						buffer[offsetT++] = c;
+					}
+				}
+				
+				flattenTreeSpecEntry(buffer[0 .. offsetT], ret, offsetForEntry, 
+					forTests, maxNumParts, numPartsSoFar+1);
+			} else if (!forTests) {
+				buffer[offsetT .. offsetT + 2] = "/*"d;
+				offsetT += 2;
+				flattenTreeSpecEntry(buffer[0 .. offsetT], ret, offsetForEntry, 
+					forTests, maxNumParts, numPartsSoFar+1);
+			}
+		}
+		
 		if (parent.haveVariable >= 0) {
 			// variable
-
-			if (!generateNewData && !unconditionalGenerate) {
+			
+			if (generateNewData) {
+				string word = words[uniform(0, words.length)];
+				uint len = cast(uint)(word.length + 1);
+				
+				buffer[offset++] = '/';
+				foreach(c; word.byDchar) {
+					buffer[offset++] = c;
+				}
+				
+				flattenTreeSpec(&parent.children[parent.haveVariable], offset, buffer, ret, offsetForEntry,
+					forTests, maxNumParts, numPartsSoFar+1);
+			} else if (!forTests) {
 				uint len = cast(uint)parent.varName.count;
-
+				
 				buffer[offset++] = '/';
 				buffer[offset++] = ':';
 				foreach(c; parent.varName.byDchar) {
 					buffer[offset++] = c;
 				}
 				
-				flattenTree(&parent.children[parent.haveVariable], offsetForEntry, ret, buffer, offset, generateNewData,
-					numPartsSoFar + 1, maxNumParts, unconditionalGenerate, maxTests, forTests);
-			} else {
-				uint len;
-
-				foreach(_; 0 .. testCount) {
-					string word = words[uniform(0, words.length)];
-					len = cast(uint)(word.length + 1);
-
-					uint offsetT = offset;
-
-					buffer[offsetT++] = '/';
-					foreach(c; word.byDchar) {
-						buffer[offsetT++] = c;
-					}
-
-					flattenTree(&parent.children[parent.haveVariable], offsetForEntry, ret, buffer, offsetT, generateNewData,
-						numPartsSoFar + 1, maxNumParts, unconditionalGenerate, maxTests, forTests);
-				}
-
-				offset += len;
+				flattenTreeSpec(&parent.children[parent.haveVariable], offset, buffer, ret, offsetForEntry, 
+					forTests, maxNumParts, numPartsSoFar+1);
 			}
-		}
-		if (parent.haveCatchAll) {
-			// catch all
-
-			if (!generateNewData && !unconditionalGenerate) {
-				buffer[offset .. offset + 2] = "/*"d;
-				offset += 2;
-			} else {
-				uint numPartsToTest = cast(uint)(segmoidForX(maxNumParts / (numPartsSoFar + 1)) * ((maxNumParts + 2) - numPartsSoFar));
-
-				foreach(test; 0 .. testCount) {
-					uint offsetT = offset;
-
-					foreach(_; 0 .. numPartsToTest) {
-						string word = words[uniform(0, words.length)];
-
-						buffer[offsetT++] = '/';
-						foreach(c; word.byDchar) {
-							buffer[offsetT++] = c;
-						}
-					}
-
-					flattenHandleLine(offsetForEntry, ret, buffer, offsetT, forTests);
-				}
-			}
-		} else if (!(parent.children.length == 0 && (parent.isAnEnd || parent.haveCatchAll))) {
+		} else {
 			// constant
-
+			
 			uint len = cast(uint)parent.constant.count;
-			endLength = len + 1;
-
 			buffer[offset++] = '/';
 			foreach(c; parent.constant.byDchar) {
 				buffer[offset++] = c;
 			}
-
+			
 			uint i;
 			foreach(ref child; parent.children) {
 				if (i != parent.haveVariable)
-					flattenTree(&child, offsetForEntry, ret, buffer, offset, generateNewData,
-						numPartsSoFar + 1, maxNumParts, unconditionalGenerate, maxTests, forTests);
+					flattenTreeSpec(&child, offset, buffer, ret, offsetForEntry,
+						forTests, maxNumParts, numPartsSoFar+1);
 				i++;
 			}
 		}
-
+		
 		if (parent.isAnEnd) {
-			flattenHandleLine(offsetForEntry, ret, buffer, offset, forTests);
+			if (forTests && !generateNewData)
+				offsetForEntry++;
+			else
+				flattenTreeSpecEntry(buffer[0 .. offset], ret, offsetForEntry, 
+					forTests, maxNumParts, numPartsSoFar+1);
 		}
 	}
+	
+	void flattenTreeSpecEntry(dchar[] buffer, ref BenchMarkItems ret, ref uint offsetForEntry,
+		bool forTests, uint maxNumParts, uint numPartsSoFar) {
 
-	void flattenHandleLine(ref uint offsetForEntry, ref BenchMarkItems ret, dchar[] buffer,
-					uint offset, bool forTests) {
-		dstring thispath = buffer[0 .. offset].idup;
+		if (!forTests && offsetForEntry == ret.items.length) {
+			ret.items.length++;
+		}
 		
-		// okay we need to start /saving/ the given route!
+		auto item = &ret.items[offsetForEntry];
 		
 		if (forTests) {
-			
-			import std.stdio;
-			writeln("END: forTests {", thispath, "}");
-			
+			item.requests ~= RouterRequest(null, buffer.idup);
 		} else {
-			
-			import std.stdio;
-			writeln("END:          {", thispath, "}");
-			
+			item.route.path = buffer.idup;
 		}
+		
+		offsetForEntry++;
 	}
 
 	static this() {
