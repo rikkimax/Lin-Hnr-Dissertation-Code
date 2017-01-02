@@ -1,6 +1,8 @@
 module webrouters.defs;
 import std.typecons : Nullable;
 
+__gshared bool verboseMode;
+
 /**
  * We don't actually define or care about the connection
  *  as part of this research.

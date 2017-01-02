@@ -2,10 +2,14 @@
 import webrouters.defs;
 
 struct BenchMarkItems {
+	import csuf.reader;
 	BenchMarkItem[] items;
 
 	RouterRequest[] allRequests;
 	IWebSite[] allWebsites;
+
+	// not used specifically in here, but is else where
+	CommandSequenceReader!dstring* csufReader;
 
 	string toString() {
 		string ret;
