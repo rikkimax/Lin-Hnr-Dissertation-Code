@@ -3,7 +3,7 @@ import webrouters.defs;
 
 T canAdd(T:IRouter)() {
 	version(unittest) {
-		static assert(__traits(hasMember, T, "allRoutes"), "The router must provide an allRoutes member with all known routes.");
+		//static assert(__traits(hasMember, T, "allRoutes"), "The router must provide an allRoutes member with all known routes.");
 
 		T router = new T;
 		RouteTest[] tests;

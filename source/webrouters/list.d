@@ -233,9 +233,9 @@ unittest {
 
 	ListRouter router = canAdd!ListRouter;
 	foreach(route; router.allRoutes) {
-		writeln(route);
+		//writeln(route);
 		foreach(addr; route.website.addresses) {
-			writeln("\t", addr.toString);
+			//writeln("\t", addr.toString);
 		}
 	}
 }

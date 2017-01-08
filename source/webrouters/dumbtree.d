@@ -9,7 +9,7 @@ final class DumbTreeRouter : IRouter {
 	Nullable!DumbTreeElement root;
 
 	this() {
-		root = DumbTreeElement();
+		root = Nullable!DumbTreeElement(DumbTreeElement());
 	}
 
 	void addRoute(Route newRoute) {
@@ -22,11 +22,11 @@ final class DumbTreeRouter : IRouter {
 			if (part == "*"d) {
 				// ok we're at an end
 				assert(parent.catchAllEndRoute.isNull);
-				parent.catchAllEndRoute = newRoute;
+				parent.catchAllEndRoute = Nullable!Route(newRoute);
 				return;
 			} else if (part.length > 0 && part[0] == ':') {
 				if (parent.variableRoute is null) {
-					parent.variableRoute = new Nullable!DumbTreeElement();
+					parent.variableRoute = new Nullable!DumbTreeElement(DumbTreeElement());
 					parent = parent.variableRoute;
 				} else {
 					parent = parent.variableRoute;
@@ -39,7 +39,7 @@ final class DumbTreeRouter : IRouter {
 					}
 				}
 
-				parent.children.length++;
+				parent.children ~= Nullable!DumbTreeElement(DumbTreeElement());
 				parent = &parent.children[$-1];
 			}
 		}
@@ -52,15 +52,55 @@ final class DumbTreeRouter : IRouter {
 	void optimize() {}
 
 	Nullable!Route run(RouterRequest routeToFind) {
-		return run(routeToFind, true, false);
-	}
-	
-	Nullable!Route run(RouterRequest routeToFind, bool nextCatchAll, bool useCatchAll) {
+		import std.algorithm : splitter;
+		Nullable!DumbTreeElement* parent = &root;
+		Nullable!Route lastCatchAll;
+		auto pathLeft = routeToFind.path.splitter("/"d);
+
+		bool didLastContinue;
+	L1: do {
+			didLastContinue = false;
+
+			foreach(ref child; parent.children) {
+				if (child.constant == pathLeft.front) {
+					parent = &child;
+					pathLeft.popFront;
+					didLastContinue = true;
+					continue L1;
+				}
+			}
+
+			// if we didn't hit a constant that matches us
+			// assume its a variable or catch all
+
+			if (parent.variableRoute !is null) {
+				parent = parent.variableRoute;
+				pathLeft.popFront;
+
+				if (!parent.catchAllEndRoute.isNull) {
+					lastCatchAll = parent.catchAllEndRoute;
+				}
+
+				didLastContinue = true;
+				continue L1;
+			}
+
+			if (!parent.catchAllEndRoute.isNull) {
+				return parent.catchAllEndRoute;
+			}
+
+			if (!didLastContinue) {
+				if (!lastCatchAll.isNull) {
+					return lastCatchAll;
+				} else {
+					break;
+				}
+			}
+
+		} while(!pathLeft.empty);
+
 		// Failed!
-		if (nextCatchAll)
-			return run(routeToFind, false, true);
-		else
-			return Nullable!Route.init;
+		return Nullable!Route.init;
 	}
 }
 
@@ -72,5 +112,12 @@ private {
 
 		Nullable!DumbTreeElement* variableRoute;
 		Nullable!DumbTreeElement[] children;
+	}
+
+	unittest {
+		import webrouters.tests;
+		import std.stdio : writeln;
+		
+		DumbTreeRouter router = canAdd!DumbTreeRouter;
 	}
 }
