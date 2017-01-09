@@ -174,9 +174,9 @@ bool isAddressesLess(ref Route a, ref Route b) {
 
 bool isRouteLess(ref Route a, ref Route b)
 out(v) {
-	import std.stdio;
-	writeln("!! ", v);
-	writeln;
+	//import std.stdio;
+	//writeln("!! ", v);
+	//writeln;
 } body {
 	import std.algorithm : splitter;
 	import std.range : zip;
@@ -191,8 +191,8 @@ out(v) {
 	if (from == to)
 		return false;
 
-	import std.stdio;
-	writeln(from, "\t", to);
+	//import std.stdio;
+	//writeln(from, "\t", to);
 
 	if (from[$-1] == '*' && to[$-1] == '*')
 		return from.length < to.length;
@@ -205,7 +205,7 @@ out(v) {
 	}
 
 	foreach(parta, partb; zip(from.splitter('/'), to.splitter('/'))) {
-		writeln(":: ", parta, "\t", partb);
+		//writeln(":: ", parta, "\t", partb);
 
 		if (parta is null) {
 			return false;

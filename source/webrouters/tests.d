@@ -8,9 +8,9 @@ T canAdd(T:IRouter)() {
 		T router = new T;
 		RouteTest[] tests;
 
-		//router.dummyData_1(tests);
+		router.dummyData_1(tests);
 		//router.dummyData_2(tests);
-		router.dummyData_3(tests);
+		//router.dummyData_3(tests);
 
 		router.optimize;
 
@@ -35,7 +35,7 @@ final class DummyWebSite : IWebSite {
 		this.values = values;
 	}
 
-	const(WebsiteAddress[]) addresses() { return cast(const)values; }
+	override const(WebsiteAddress[]) addresses() { return cast(const)values; }
 }
 
 private:

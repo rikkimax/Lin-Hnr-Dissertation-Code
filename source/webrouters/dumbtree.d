@@ -6,17 +6,33 @@ import std.typecons : Nullable;
  *
  */
 final class DumbTreeRouter : IRouter {
-	Nullable!DumbTreeElement root;
+	DumbTreeRoot[] roots;
 
-	this() {
-		root = Nullable!DumbTreeElement(DumbTreeElement());
-	}
+	this() {}
 
 	void addRoute(Route newRoute) {
 		import std.algorithm : splitter;
 		import std.string : indexOf;
 
-		Nullable!DumbTreeElement* parent = &root;
+		Nullable!DumbTreeElement* parent, parentInit;
+
+		// we need to determine which root we are talking about
+		// keep in mind we don't attempt to "merge" websites
+
+		foreach(ref root; roots) {
+			if (root.website == newRoute.website) {
+				parent = &root.root;
+			}
+		}
+
+		if (parent is null) {
+			roots.length++;
+			roots[$-1].root = DumbTreeElement();
+			roots[$-1].website = newRoute.website;
+			parent = &roots[$-1].root;
+		}
+
+		parentInit = parent;
 
 		foreach(part; newRoute.path.splitter('/')) {
 			if (part == "*"d) {
@@ -44,7 +60,7 @@ final class DumbTreeRouter : IRouter {
 			}
 		}
 
-		if (parent !is &root) {
+		if (parent !is parentInit) {
 			parent.endRoute = newRoute;
 		}
 	}
@@ -53,9 +69,35 @@ final class DumbTreeRouter : IRouter {
 
 	Nullable!Route run(RouterRequest routeToFind) {
 		import std.algorithm : splitter;
-		Nullable!DumbTreeElement* parent = &root;
+		Nullable!DumbTreeElement* parent, parentCatchAll;
 		Nullable!Route lastCatchAll;
 		auto pathLeft = routeToFind.path.splitter("/"d);
+
+		foreach(ref root; roots) {
+			foreach(addr; root.website.addresses) {
+				
+				// hostname,
+				// port,
+				//
+				// (non-/require)ssl
+				if (addr.hostname == routeToFind.hostname &&
+					((addr.supportsSSL && routeToFind.useSSL) || (!routeToFind.useSSL) || (addr.requiresSSL && routeToFind.useSSL))) {
+
+					if (!addr.port.isSpecial && addr.port.value == routeToFind.port) {
+						parent = &root.root;
+					} else if (addr.port.isSpecial && addr.port.special == WebSiteAddressPort.Special.CatchAll) {
+						parentCatchAll = &root.root;
+					}
+				}
+			}
+		}
+
+		if (parent is null && parentCatchAll is null) {
+			// not valid website
+			return Nullable!Route.init;
+		} else if (parent is null) {
+			parent = parentCatchAll;
+		}
 
 		bool didLastContinue;
 	L1: do {
@@ -105,6 +147,11 @@ final class DumbTreeRouter : IRouter {
 }
 
 private {
+	struct DumbTreeRoot {
+		IWebSite website;
+		Nullable!DumbTreeElement root;
+	}
+
 	struct DumbTreeElement {
 		dstring constant;
 		Nullable!Route endRoute;

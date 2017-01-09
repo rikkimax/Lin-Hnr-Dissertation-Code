@@ -32,8 +32,68 @@ interface IRouter {
  *
  *
  */
-interface IWebSite {
+abstract class IWebSite {
     const(WebsiteAddress[]) addresses();
+
+	override bool opEquals(Object other) {
+		// when we compare websites, 
+		// we take us and look for us in another
+		// the other may have only a partial equality
+		// and that means we don't equal
+		// in usage, remember != probably really means <
+
+		if (IWebSite otherW = cast(IWebSite)other) {
+			if (addresses.length != otherW.addresses.length) {
+				return false;
+			}
+
+			// the next problem is the order of addresses
+			// wonderful...
+			// host.name, sub.host.name versus sub.host.name, host.name
+			// wrong order, but still perfactly valid
+
+			uint addressesMatched;
+		F1: foreach(addr; addresses) {
+			F2: foreach(addr2; otherW.addresses) {
+					// if we match, we continue
+
+					// check the ports, so we know it matches there
+					if (addr.port.isSpecial && addr2.port.isSpecial &&
+						addr.port.special == addr2.port.special) {
+						// matched, fine ok
+					} else if (!addr.port.isSpecial && !addr2.port.isSpecial &&
+						addr.port.value == addr2.port.value) {
+						// value same, ok
+					} else {
+						// didn't match 
+						continue F2;
+					}
+
+					if (addr.supportsSSL == addr2.supportsSSL) {
+					} else {
+						continue F2;
+					}
+
+					if (addr.requiresSSL == addr2.requiresSSL) {
+					} else {
+						continue F2;
+					}
+
+					if (addr.hostname == addr2.hostname) {
+					} else {
+						continue F2;
+					}
+
+					addressesMatched++;
+					continue F1;
+				}
+			}
+
+			return addressesMatched == addresses.length;
+		} else {
+			return false;
+		}
+	}
 }
 
 struct WebSiteAddressPort {
