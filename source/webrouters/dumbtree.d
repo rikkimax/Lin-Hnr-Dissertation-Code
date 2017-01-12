@@ -20,7 +20,7 @@ final class DumbTreeRouter : IRouter {
 		// keep in mind we don't attempt to "merge" websites
 
 		foreach(ref root; roots) {
-			if (root.website == newRoute.website) {
+			if (root.website == newRoute.website && root.statusCode == newRoute.code) {
 				parent = &root.root;
 			}
 		}
@@ -28,6 +28,7 @@ final class DumbTreeRouter : IRouter {
 		if (parent is null) {
 			roots.length++;
 			roots[$-1].root = DumbTreeElement();
+			roots[$-1].statusCode = newRoute.code;
 			roots[$-1].website = newRoute.website;
 			parent = &roots[$-1].root;
 		}
@@ -68,25 +69,33 @@ final class DumbTreeRouter : IRouter {
 	void optimize() {}
 
 	Nullable!Route run(RouterRequest routeToFind) {
+		return run(routeToFind, 200);
+	}
+
+	Nullable!Route run(RouterRequest routeToFind, int toFindStatusCode) {
 		import std.algorithm : splitter;
 		Nullable!DumbTreeElement* parent, parentCatchAll;
 		Nullable!Route lastCatchAll;
 		auto pathLeft = routeToFind.path.splitter("/"d);
 
-		foreach(ref root; roots) {
-			foreach(addr; root.website.addresses) {
-				
-				// hostname,
-				// port,
-				//
-				// (non-/require)ssl
-				if (addr.hostname == routeToFind.hostname &&
-					((addr.supportsSSL && routeToFind.useSSL) || (!routeToFind.useSSL) || (addr.requiresSSL && routeToFind.useSSL))) {
+	F1: foreach(ref root; roots) {
+			if (root.statusCode == toFindStatusCode) {
+				foreach(addr; root.website.addresses) {
+					
+					// hostname,
+					// port,
+					//
+					// (non-/require)ssl
+					if (addr.hostname == routeToFind.hostname &&
+						((addr.supportsSSL && routeToFind.useSSL) || (!routeToFind.useSSL) || (addr.requiresSSL && routeToFind.useSSL))) {
 
-					if (!addr.port.isSpecial && addr.port.value == routeToFind.port) {
-						parent = &root.root;
-					} else if (addr.port.isSpecial && addr.port.special == WebSiteAddressPort.Special.CatchAll) {
-						parentCatchAll = &root.root;
+						if (!addr.port.isSpecial && addr.port.value == routeToFind.port) {
+							parent = &root.root;
+							break F1;
+						} else if (addr.port.isSpecial && addr.port.special == WebSiteAddressPort.Special.CatchAll) {
+							parentCatchAll = &root.root;
+							break F1;
+						}
 					}
 				}
 			}
@@ -149,6 +158,7 @@ final class DumbTreeRouter : IRouter {
 private {
 	struct DumbTreeRoot {
 		IWebSite website;
+		int statusCode;
 		Nullable!DumbTreeElement root;
 	}
 

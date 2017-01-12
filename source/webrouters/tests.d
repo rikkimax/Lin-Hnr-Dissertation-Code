@@ -8,8 +8,8 @@ T canAdd(T:IRouter)() {
 		T router = new T;
 		RouteTest[] tests;
 
-		router.dummyData_1(tests);
-		//router.dummyData_2(tests);
+		//router.dummyData_1(tests);
+		router.dummyData_2(tests);
 		//router.dummyData_3(tests);
 
 		router.optimize;
@@ -60,17 +60,10 @@ void dummyData_1(IRouter router, ref RouteTest[] tests) {
 
 	router.adder(tests, Route(website, "some/path", 200, false), RouterRequest("example.com", "some/path"));
 	router.adder(tests, Route(website, "*", 404, false), RouterRequest("example.com", "alt"), false);
-	router.adder(tests, Route(website, "some/path", 200, false), RouterRequest("example.com", "some/path"));
-	router.adder(tests, Route(website, "some/path", 200, false), RouterRequest("example.com", "some/path"));
-	router.adder(tests, Route(website, "some/path", 200, false), RouterRequest("example.com", "some/path"));
-	router.adder(tests, Route(website, "some/path", 200, false), RouterRequest("example.com", "some/path"));
-
-	router.addRoute(Route(website, "some/path/*", 200, false));
-	router.addRoute(Route(website, "*", 404, false));
-	router.addRoute(Route(website, "*", 500, false));
-	router.addRoute(Route(website, "abcd", 200, false));
-	router.addRoute(Route(website, "xyz/*", 500, false));
-	router.addRoute(Route(website, "xyz/d", 200, false));
+	router.adder(tests, Route(website, "*", 500, false), RouterRequest("example.com", "alt"), false);
+	router.adder(tests, Route(website, "abcd", 200, false), RouterRequest("example.com", "abcd"));
+	router.adder(tests, Route(website, "xyz/*", 500, false), RouterRequest("example.com", "xyz/alt"), false);
+	router.adder(tests, Route(website, "xyz/d", 200, false), RouterRequest("example.com", "xyz/d"));
 }
 
 void dummyData_2(IRouter router, ref RouteTest[] tests) {
@@ -86,11 +79,12 @@ void dummyData_2(IRouter router, ref RouteTest[] tests) {
 		WebsiteAddress("sub2.example.com"d, WebSiteAddressPort(443), true, true),
 	]);
 
-	router.addRoute(Route(website1, "some/path", 200, false));
-	router.addRoute(Route(website1, "*", 200, false));
-	router.addRoute(Route(website2, "some/path", 200, false));
-	router.addRoute(Route(website2, "some/:var", 200, false));
-	router.addRoute(Route(website2, "some/path/*", 200, false));
+	router.adder(tests, Route(website1, "some/path", 200, false), RouterRequest("sub.example.com", "some/path"));
+	router.adder(tests, Route(website1, "*", 200, false), RouterRequest("sub.example.com", "something/val"));
+
+	router.adder(tests, Route(website2, "some/path", 200, false), RouterRequest("sub2.example.com", "some/path"));
+	router.adder(tests, Route(website2, "some/:myvar", 200, false), RouterRequest("sub2.example.com", "some/value_here"));
+	router.adder(tests, Route(website2, "some/path/*", 200, false), RouterRequest("sub2.example.com", "some/path/goes/through/here"));
 }
 
 void dummyData_3(IRouter router, ref RouteTest[] tests) {
