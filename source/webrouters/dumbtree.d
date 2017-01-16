@@ -5,7 +5,8 @@ import std.typecons : Nullable;
 /**
  *
  */
-final class DumbTreeRouter : IRouter {
+class DumbTreeRouter : IRouter {
+	size_t totalNumberOfElements;
 	DumbTreeRoot[] roots;
 
 	this() {}
@@ -31,6 +32,7 @@ final class DumbTreeRouter : IRouter {
 			roots[$-1].statusCode = newRoute.code;
 			roots[$-1].website = newRoute.website;
 			parent = &roots[$-1].root;
+			totalNumberOfElements++;
 		}
 
 		parentInit = parent;
@@ -40,11 +42,13 @@ final class DumbTreeRouter : IRouter {
 				// ok we're at an end
 				assert(parent.catchAllEndRoute.isNull);
 				parent.catchAllEndRoute = Nullable!Route(newRoute);
+				totalNumberOfElements++;
 				return;
 			} else if (part.length > 0 && part[0] == ':') {
 				if (parent.variableRoute is null) {
 					parent.variableRoute = new Nullable!DumbTreeElement(DumbTreeElement());
 					parent = parent.variableRoute;
+					totalNumberOfElements++;
 				} else {
 					parent = parent.variableRoute;
 				}
@@ -58,6 +62,7 @@ final class DumbTreeRouter : IRouter {
 
 				parent.children ~= Nullable!DumbTreeElement(DumbTreeElement());
 				parent = &parent.children[$-1];
+				totalNumberOfElements++;
 			}
 		}
 
@@ -68,14 +73,12 @@ final class DumbTreeRouter : IRouter {
 
 	void optimize() {}
 
-	Nullable!Route run(RouterRequest routeToFind) {
-		return run(routeToFind, 200);
-	}
-
-	Nullable!Route run(RouterRequest routeToFind, int toFindStatusCode) {
+	Nullable!Route run(RouterRequest routeToFind, ushort toFindStatusCode=200) {
 		import std.algorithm : splitter;
+		import webrouters.list : isHostnameMatch;
+
 		Nullable!DumbTreeElement* parent, parentCatchAll;
-		Nullable!Route lastCatchAll;
+		Nullable!Route lastCatchAll, lastRoute;
 		auto pathLeft = routeToFind.path.splitter("/"d);
 
 	F1: foreach(ref root; roots) {
@@ -86,7 +89,7 @@ final class DumbTreeRouter : IRouter {
 					// port,
 					//
 					// (non-/require)ssl
-					if (addr.hostname == routeToFind.hostname &&
+					if (isHostnameMatch(addr.hostname, routeToFind.hostname) &&
 						((addr.supportsSSL && routeToFind.useSSL) || (!routeToFind.useSSL) || (addr.requiresSSL && routeToFind.useSSL))) {
 
 						if (!addr.port.isSpecial && addr.port.value == routeToFind.port) {
@@ -108,7 +111,7 @@ final class DumbTreeRouter : IRouter {
 			parent = parentCatchAll;
 		}
 
-		bool didLastContinue;
+		/+bool didLastContinue;
 	L1: do {
 			didLastContinue = false;
 
@@ -148,10 +151,18 @@ final class DumbTreeRouter : IRouter {
 				}
 			}
 
-		} while(!pathLeft.empty);
+		} while(!pathLeft.empty);+/
 
-		// Failed!
-		return Nullable!Route.init;
+
+
+		if (lastRoute !is null && ((lastCatchAll !is null && lastCatchAll < lastRoute) || lastCatchAll is null)) {
+			return Nullable!Route(*lastRoute);
+		} else if (lastCatchAll !is null) {
+			return Nullable!Route(*lastCatchAll);
+		} else {
+			// Failed!
+			return Nullable!Route.init;
+		}
 	}
 }
 

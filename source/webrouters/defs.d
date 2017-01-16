@@ -24,7 +24,7 @@ interface IConnection {
 interface IRouter {
     void addRoute(Route);
     void optimize();
-	Nullable!Route run(RouterRequest);
+	Nullable!Route run(RouterRequest, ushort statusCode=200);
 }
 
 /**
@@ -150,7 +150,7 @@ struct Route {
      * If this route is "special" e.g. error handler
      *  then this won't be 200, e.g. 404.
      */
-    int code = 200;
+	ushort code = 200;
 
     bool requiresSSL;
 

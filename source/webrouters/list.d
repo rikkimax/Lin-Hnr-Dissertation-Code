@@ -7,11 +7,8 @@ import std.typecons : Nullable;
  *
  * This is important to know just how bad other router implementations can be.
  * After all, this has NO optimizations applied to it.
- *
- * TODO:
- *     - Sort the routes by hostname and then by path
  */
-final class ListRouter : IRouter {
+class ListRouter : IRouter {
 	Route[] allRoutes;
 
 	void addRoute(Route newRoute) {
@@ -36,37 +33,57 @@ final class ListRouter : IRouter {
 		)(allRoutes);
 	}
 
-	Nullable!Route run(RouterRequest routeToFind) {
-		return run(routeToFind, true, false);
-	}
+	Nullable!Route run(RouterRequest routeToFind, ushort statusCode=200) {
+		Route* lastCatchAll, lastRoute;
 
-	Nullable!Route run(RouterRequest routeToFind, bool nextCatchAll, bool useCatchAll) {
-		foreach(route; allRoutes) {
+	F1: foreach(ref route; allRoutes) {
+			if (route.code != statusCode)
+				continue F1;
+
 			foreach(addr; route.website.addresses) {
-
 				// hostname,
 				// port,
 				//
 				// (non-/require)ssl
-				if (addr.hostname == routeToFind.hostname &&
-					((!useCatchAll && !addr.port.isSpecial && addr.port.value == routeToFind.port) ||
-						(useCatchAll && (addr.port.isSpecial && addr.port.special == WebSiteAddressPort.Special.CatchAll))) &&
+				if (isHostnameMatch(addr.hostname, routeToFind.hostname) &&
 					((addr.supportsSSL && routeToFind.useSSL) || (!routeToFind.useSSL) || (addr.requiresSSL && routeToFind.useSSL))) {
 
 					// now the path
 					if (isRouteMatch(routeToFind.path, route.path)) {
-						return Nullable!Route(route);
+						if (!addr.port.isSpecial && addr.port.value == routeToFind.port) {
+							lastRoute = &route;
+						} else if (addr.port.isSpecial && addr.port.special == WebSiteAddressPort.Special.CatchAll) {
+							lastCatchAll = &route;
+						}
+					} else if (lastRoute !is null) {
+						// early break out, cos its costly to keep it going after we've hit ours
+						break F1;
 					}
 				}
 
 			}
 		}
 
-		// Failed!
-		if (nextCatchAll)
-			return run(routeToFind, false, true);
-		else
+		if (lastRoute !is null && ((lastCatchAll !is null && lastCatchAll < lastRoute) || lastCatchAll is null)) {
+			return Nullable!Route(*lastRoute);
+		} else if (lastCatchAll !is null) {
+			return Nullable!Route(*lastCatchAll);
+		} else {
+			// Failed!
 			return Nullable!Route.init;
+		}
+	}
+}
+
+bool isHostnameMatch(dstring from, dstring to) {
+	if (from[0] == '*') {
+		if (to.length >= from.length) {
+			return to[$-from.length-1 .. $] == from;
+		}
+
+		return false;
+	} else {
+		return from == to;
 	}
 }
 
