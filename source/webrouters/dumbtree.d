@@ -8,24 +8,24 @@ import std.typecons : Nullable;
 class DumbTreeRouter : IRouter {
 	size_t totalNumberOfElements;
 	DumbTreeRoot[] roots;
-
+	
 	this() {}
-
+	
 	void addRoute(Route newRoute) {
 		import std.algorithm : splitter;
 		import std.string : indexOf;
-
+		
 		Nullable!DumbTreeElement* parent, parentInit;
-
+		
 		// we need to determine which root we are talking about
 		// keep in mind we don't attempt to "merge" websites
-
+		
 		foreach(ref root; roots) {
 			if (root.website == newRoute.website && root.statusCode == newRoute.code) {
 				parent = &root.root;
 			}
 		}
-
+		
 		if (parent is null) {
 			roots.length++;
 			roots[$-1].root = DumbTreeElement();
@@ -34,10 +34,10 @@ class DumbTreeRouter : IRouter {
 			parent = &roots[$-1].root;
 			totalNumberOfElements++;
 		}
-
+		
 		parentInit = parent;
-
-		foreach(part; newRoute.path.splitter('/')) {
+		
+	F1: foreach(part; newRoute.path.splitter('/')) {
 			if (part == "*"d) {
 				// ok we're at an end
 				assert(parent.catchAllEndRoute.isNull);
@@ -56,30 +56,32 @@ class DumbTreeRouter : IRouter {
 				foreach(ref child; parent.children) {
 					if (child.constant == part) {
 						parent = &child;
-						continue;
+						continue F1;
 					}
 				}
-
+				
 				parent.children ~= Nullable!DumbTreeElement(DumbTreeElement());
 				parent = &parent.children[$-1];
+				parent.constant = part;
 				totalNumberOfElements++;
 			}
 		}
-
+		
 		if (parent !is parentInit) {
 			parent.endRoute = newRoute;
 		}
 	}
-
+	
 	void optimize() {}
-
+	
 	Nullable!Route run(RouterRequest routeToFind, ushort toFindStatusCode=200) {
 		import std.algorithm : splitter;
 		import webrouters.list : isHostnameMatch;
-
-		Nullable!DumbTreeElement* parent, parentCatchAll;
-		Nullable!Route lastCatchAll, lastRoute;
+		
+		Nullable!DumbTreeElement* parent, parentCatchAll, parentCatchAll2;
+		Nullable!Route* lastCatchAll, lastRoute;
 		auto pathLeft = routeToFind.path.splitter("/"d);
+		auto pathLeftCatchAll = pathLeft;
 
 	F1: foreach(ref root; roots) {
 			if (root.statusCode == toFindStatusCode) {
@@ -91,7 +93,7 @@ class DumbTreeRouter : IRouter {
 					// (non-/require)ssl
 					if (isHostnameMatch(addr.hostname, routeToFind.hostname) &&
 						((addr.supportsSSL && routeToFind.useSSL) || (!routeToFind.useSSL) || (addr.requiresSSL && routeToFind.useSSL))) {
-
+						
 						if (!addr.port.isSpecial && addr.port.value == routeToFind.port) {
 							parent = &root.root;
 							break F1;
@@ -111,50 +113,37 @@ class DumbTreeRouter : IRouter {
 			parent = parentCatchAll;
 		}
 
-		/+bool didLastContinue;
-	L1: do {
-			didLastContinue = false;
+		do {
+			bool wasHandled;
 
-			foreach(ref child; parent.children) {
-				if (child.constant == pathLeft.front) {
-					parent = &child;
-					pathLeft.popFront;
-					didLastContinue = true;
-					continue L1;
+			if (parent !is null) {
+				if (processARun(parent, parentCatchAll, pathLeft,
+						lastRoute, lastCatchAll,
+						routeToFind, toFindStatusCode)) {
+					// we hit a constant route, yay!
+					wasHandled = true;
 				}
 			}
 
-			// if we didn't hit a constant that matches us
-			// assume its a variable or catch all
+			if (parentCatchAll !is null) {
+				pathLeftCatchAll = pathLeft.save;
+				if (processARun(parentCatchAll, parentCatchAll2, pathLeftCatchAll,
+							lastRoute, lastCatchAll,
+							routeToFind, toFindStatusCode)) {
+					parent = parentCatchAll;
+					parentCatchAll = parentCatchAll2;
+					pathLeft = pathLeftCatchAll;
 
-			if (parent.variableRoute !is null) {
-				parent = parent.variableRoute;
-				pathLeft.popFront;
-
-				if (!parent.catchAllEndRoute.isNull) {
-					lastCatchAll = parent.catchAllEndRoute;
-				}
-
-				didLastContinue = true;
-				continue L1;
-			}
-
-			if (!parent.catchAllEndRoute.isNull) {
-				return parent.catchAllEndRoute;
-			}
-
-			if (!didLastContinue) {
-				if (!lastCatchAll.isNull) {
-					return lastCatchAll;
-				} else {
-					break;
+					// handles a variable parent
+					wasHandled = true;
 				}
 			}
 
-		} while(!pathLeft.empty);+/
-
-
-
+			if (!wasHandled) {
+				break;
+			}
+		} while (parent !is null && !pathLeft.empty);
+		
 		if (lastRoute !is null && ((lastCatchAll !is null && lastCatchAll < lastRoute) || lastCatchAll is null)) {
 			return Nullable!Route(*lastRoute);
 		} else if (lastCatchAll !is null) {
@@ -164,6 +153,73 @@ class DumbTreeRouter : IRouter {
 			return Nullable!Route.init;
 		}
 	}
+	
+	bool processARun(T)(ref Nullable!DumbTreeElement* parent, ref Nullable!DumbTreeElement* nextVariable, ref T source,
+		ref Nullable!Route* endRoute, ref Nullable!Route* catchAllRoute, 
+		ref RouterRequest routeToFind, ushort toFindStatusCode) {
+
+		bool somethingHasChanged;
+		Nullable!DumbTreeElement* nextParent = parent;
+		do {
+			bool altered, alteredCatchAll;
+
+			// you can't be empty for variables path parts of constants ;)
+			if (!source.empty) {
+			F2: foreach(ref child; parent.children) {
+					if (child.constant == source.front) {
+						altered = true;
+						nextParent = &child;
+
+						if (!child.endRoute.isNull) {
+							endRoute = &child.endRoute;
+						}
+
+						break F2;
+					}
+				}
+
+				if (parent.variableRoute !is null) {
+					alteredCatchAll = true;
+					nextVariable = parent.variableRoute;
+					if (!nextVariable.endRoute.isNull) {
+						catchAllRoute = &nextVariable.endRoute;
+					}
+				}
+			}
+
+			if (!parent.catchAllEndRoute.isNull) {
+				alteredCatchAll = true;
+				catchAllRoute = &parent.catchAllEndRoute;
+			}
+
+			if (alteredCatchAll) {
+				// a catch all was set (thats ok then).
+				somethingHasChanged = true;
+
+				if (!source.empty) {
+					source.popFront;
+				} else {
+					source = T.init;
+				}
+			}
+
+			if (altered) {
+				if (!source.empty) {
+					source.popFront;
+				} else {
+					source = T.init;
+				}
+				parent = nextParent;
+				somethingHasChanged = true;
+			} else {
+				// nothing happend
+				return somethingHasChanged;
+			}
+
+		} while(parent !is null);
+
+		return somethingHasChanged;
+	}
 }
 
 private {
@@ -172,16 +228,16 @@ private {
 		int statusCode;
 		Nullable!DumbTreeElement root;
 	}
-
+	
 	struct DumbTreeElement {
 		dstring constant;
 		Nullable!Route endRoute;
 		Nullable!Route catchAllEndRoute;
-
+		
 		Nullable!DumbTreeElement* variableRoute;
 		Nullable!DumbTreeElement[] children;
 	}
-
+	
 	unittest {
 		import webrouters.tests;
 		import std.stdio : writeln;

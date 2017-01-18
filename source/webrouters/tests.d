@@ -8,9 +8,9 @@ T canAdd(T:IRouter)() {
 		T router = new T;
 		RouteTest[] tests;
 
-		router.dummyData_1(tests);
+		//router.dummyData_1(tests);
 		//router.dummyData_2(tests);
-		//router.dummyData_3(tests);
+		router.dummyData_3(tests);
 
 		router.optimize;
 
@@ -62,7 +62,7 @@ void dummyData_1(IRouter router, ref RouteTest[] tests) {
 
 	router.adder(tests, Route(website, "some/path", 200, false), RouterRequest("example.com", "some/path", 80));
 	router.adder(tests, Route(website, "*", 404, false), RouterRequest("example.com", "alt", 80), false);
-	router.adder(tests, Route(website, "*", 500, false), RouterRequest("example.com", "alt", 80), false);
+    router.adder(tests, Route(website, "*", 500, false), RouterRequest("example.com", "alt", 80), false);
 	router.adder(tests, Route(website, "abcd", 200, false), RouterRequest("example.com", "abcd", 80));
 	router.adder(tests, Route(website, "xyz/*", 500, false), RouterRequest("example.com", "xyz/alt", 80), false);
 	router.adder(tests, Route(website, "xyz/d", 200, false), RouterRequest("example.com", "xyz/d", 80));

@@ -55,6 +55,7 @@ class ListRouter : IRouter {
 						} else if (addr.port.isSpecial && addr.port.special == WebSiteAddressPort.Special.CatchAll) {
 							lastCatchAll = &route;
 						}
+						continue F1;
 					} else if (lastRoute !is null) {
 						// early break out, cos its costly to keep it going after we've hit ours
 						break F1;
@@ -78,7 +79,7 @@ class ListRouter : IRouter {
 bool isHostnameMatch(dstring from, dstring to) {
 	if (from[0] == '*') {
 		if (to.length >= from.length) {
-			return to[$-from.length-1 .. $] == from;
+			return to[$-(from.length-2) .. $] == from[2 .. $];
 		}
 
 		return false;
@@ -240,11 +241,11 @@ out(v) {
 			return false;
 		}
 	}
-	
+
 	return true;
 }
 
-unittest {
+/+unittest {
 	import webrouters.tests;
 	import std.stdio : writeln;
 
@@ -256,3 +257,4 @@ unittest {
 		}
 	}
 }
++/
