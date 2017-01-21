@@ -1,5 +1,6 @@
 ﻿module webrouters.dumbtree;
 import webrouters.defs;
+import webrouters.util;
 import std.typecons : Nullable;
 
 /**

@@ -19,7 +19,8 @@ T canAdd(T:IRouter)() {
 
 			if (test.willSucceed && result.isNull) {
 				import std.stdio;
-				writeln(test);
+				writeln(__LINE__, ": ", result);
+				writeln(__LINE__, ": ", test);
 				assert(0);
 			}
 		}

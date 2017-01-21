@@ -1,5 +1,6 @@
 ﻿module webrouters.list;
 import webrouters.defs;
+import webrouters.util;
 import std.typecons : Nullable;
 
 /**
@@ -49,19 +50,20 @@ class ListRouter : IRouter {
 					((addr.supportsSSL && routeToFind.useSSL) || (!routeToFind.useSSL) || (addr.requiresSSL && routeToFind.useSSL))) {
 
 					// now the path
-					if (isRouteMatch(routeToFind.path, route.path)) {
+					if (isRouteMatch(route.path, routeToFind.path)) {
 						if (!addr.port.isSpecial && addr.port.value == routeToFind.port) {
 							lastRoute = &route;
 						} else if (addr.port.isSpecial && addr.port.special == WebSiteAddressPort.Special.CatchAll) {
 							lastCatchAll = &route;
+						} else {
 						}
 						continue F1;
 					} else if (lastRoute !is null) {
 						// early break out, cos its costly to keep it going after we've hit ours
 						break F1;
+					} else {
 					}
 				}
-
 			}
 		}
 
@@ -88,114 +90,7 @@ bool isHostnameMatch(dstring from, dstring to) {
 	}
 }
 
-bool isRouteMatch(dstring from, dstring to) {
-	import std.algorithm : splitter;
-	import std.string : indexOf;
-
-	foreach(part; from.splitter('/')) {
-		if (part == "*"d) {
-			return true;
-		} else if (part.length > 0 && part[0] == ':') {
-			ptrdiff_t index = to.indexOf('/');
-			if (index == -1)
-				return false;
-			else
-				to = to[index + 1 .. $];
-		} else if (part.length <= to.length && part == to[0 .. part.length]) {
-			to = to[part.length .. $];
-			if (to.length > 0 && to[0] == '/')
-				to = to[1 .. $];
-		} else
-			return false;
-	}
-
-	return true;
-}
-
-bool isAddressesLess(ref Route a, ref Route b) {
-	// should we go first?
-
-	auto from = a.website.addresses;
-	auto to = b.website.addresses;
-
-	if (from.length > to.length)
-		return false;
-	else if (from.length < to.length)
-		return true;
-	else {
-		// same length so lets check if they match
-
-		uint lessPort, morePort;
-		uint lessSupportsSSL, moreSupportsSSL;
-		uint lessRequiresSSL, moreRequiresSSL;
-		uint lessHostname, moreHostname;
-
-		foreach(ref f; from) {
-			foreach(ref t; to) {
-				if (f.port.isSpecial && t.port.isSpecial) {
-					// inaction
-				} else if (f.port.isSpecial) {
-					lessPort++;
-				} else if (t.port.isSpecial) {
-					morePort++;
-				} else if (f.port.value < t.port.value)
-					lessPort++;
-				else
-					morePort++;
-
-				if (f.supportsSSL && t.supportsSSL) {
-					// inaction
-				} else if (f.supportsSSL && !t.supportsSSL)
-					lessSupportsSSL++;
-				else if (!f.supportsSSL && t.supportsSSL)
-					moreSupportsSSL++;
-				else {
-					// inaction
-				}
-
-				if (f.requiresSSL && t.requiresSSL) {
-					// inaction
-				} else if (f.requiresSSL && !t.requiresSSL)
-					lessRequiresSSL++;
-				else if (!f.requiresSSL && t.requiresSSL)
-					moreRequiresSSL++;
-				else {
-					// inaction
-				}
-
-				if (f.hostname == t.hostname) {
-					// inaction
-				} else if (f.hostname < t.hostname)
-					lessHostname++;
-				else if (f.hostname > t.hostname)
-					moreHostname++;
-
-				if (f.hostname[0] == '*' && t.hostname[0] == '*') {
-					//inaction
-				} else if (f.hostname[0] == '*')
-					moreHostname++;
-				else if (t.hostname[0] == '*')
-					lessHostname++;
-				else {
-					// inaction
-				}
-
-			}
-		}
-
-		return lessPort < morePort &&
-			lessRequiresSSL < lessRequiresSSL &&
-			lessSupportsSSL < moreSupportsSSL &&
-			lessHostname < moreHostname;
-	}
-}
-
-bool isRouteLess(ref Route a, ref Route b)
-out(v) {
-	//import std.stdio;
-	//writeln("!! ", v);
-	//writeln;
-} body {
+bool isRouteLess(ref Route a, ref Route b) {
 	import std.algorithm : splitter;
 	import std.range : zip;
 	import std.string : indexOf;
@@ -209,9 +104,6 @@ out(v) {
 	if (from == to)
 		return false;
 
-	//import std.stdio;
-	//writeln(from, "\t", to);
-
 	if (from[$-1] == '*' && to[$-1] == '*')
 		return from.length < to.length;
 	else if (from[$-1] == '*')
@@ -223,8 +115,6 @@ out(v) {
 	}
 
 	foreach(parta, partb; zip(from.splitter('/'), to.splitter('/'))) {
-		//writeln(":: ", parta, "\t", partb);
-
 		if (parta is null) {
 			return false;
 		} else if (partb is null)
@@ -245,7 +135,7 @@ out(v) {
 	return true;
 }
 
-/+unittest {
+unittest {
 	import webrouters.tests;
 	import std.stdio : writeln;
 
@@ -257,4 +147,3 @@ out(v) {
 		}
 	}
 }
-+/
