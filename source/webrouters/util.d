@@ -69,12 +69,12 @@ bool isAddressesLess(ref Route a, ref Route b) {
 		hostnamesA < hostnamesB;
 }
 
-bool isRouteMatch(dstring from, dstring to) {
+bool isRouteMatch(string from, string to) {
 	import std.algorithm : splitter;
 	import std.string : indexOf;
 
 	foreach(part; from.splitter('/')) {
-		if (part == "*"d) {
+		if (part == "*") {
 			return true;
 		} else if (part.length > 0 && part[0] == ':') {
 			if (to is null)
@@ -112,7 +112,7 @@ ulong addressCalculation(ref const WebsiteAddress addr, ulong val) {
 		// an assumption of how hostnames hashing works
 		assert(numPart <= 10);
 
-		dstring part;
+		string part;
 		if (c == '.' || i == 0) {
 			numPart++;
 			if (len == 0 && i > 0) {
@@ -125,7 +125,7 @@ ulong addressCalculation(ref const WebsiteAddress addr, ulong val) {
 			} else
 				part = addr.hostname[i+1 .. i+1 + len];
 
-			if (part == "*"d) {
+			if (part == "*") {
 				ret += val * 5;
 			} else {
 				ret += cast(ulong)(val * (4f / (100f / len)));

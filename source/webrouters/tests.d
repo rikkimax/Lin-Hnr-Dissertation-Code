@@ -57,8 +57,8 @@ void adder(IRouter router, ref RouteTest[] tests, Route route, RouterRequest req
 
 void dummyData_1(IRouter router, ref RouteTest[] tests) {
 	IWebSite website = new DummyWebSite([
-		WebsiteAddress("example.com"d, WebSiteAddressPort(80), true, false),
-		WebsiteAddress("example.com"d, WebSiteAddressPort(443), true, true),
+		WebsiteAddress("example.com", WebSiteAddressPort(80), true, false),
+		WebsiteAddress("example.com", WebSiteAddressPort(443), true, true),
 	]);
 
 	router.adder(tests, Route(website, "some/path", 200, false), RouterRequest("example.com", "some/path", 80));
@@ -73,13 +73,13 @@ void dummyData_2(IRouter router, ref RouteTest[] tests) {
 	router.dummyData_1(tests);
 
 	IWebSite website1 = new DummyWebSite([
-		WebsiteAddress("sub.example.com"d, WebSiteAddressPort(80), true, false),
-		WebsiteAddress("sub.example.com"d, WebSiteAddressPort(443), true, true),
+		WebsiteAddress("sub.example.com", WebSiteAddressPort(80), true, false),
+		WebsiteAddress("sub.example.com", WebSiteAddressPort(443), true, true),
 	]);
 
 	IWebSite website2 = new DummyWebSite([
-		WebsiteAddress("sub2.example.com"d, WebSiteAddressPort(80), true, false),
-		WebsiteAddress("sub2.example.com"d, WebSiteAddressPort(443), true, true),
+		WebsiteAddress("sub2.example.com", WebSiteAddressPort(80), true, false),
+		WebsiteAddress("sub2.example.com", WebSiteAddressPort(443), true, true),
 	]);
 
 	router.adder(tests, Route(website1, "some/path", 200, false), RouterRequest("sub.example.com", "some/path", 80));
@@ -94,8 +94,8 @@ void dummyData_3(IRouter router, ref RouteTest[] tests) {
 	router.dummyData_2(tests);
 
 	IWebSite website = new DummyWebSite([
-		WebsiteAddress("*.example.com"d, WebSiteAddressPort(80), true, false),
-		WebsiteAddress("*.example.com"d, WebSiteAddressPort(443), true, true),
+		WebsiteAddress("*.example.com", WebSiteAddressPort(80), true, false),
+		WebsiteAddress("*.example.com", WebSiteAddressPort(443), true, true),
 	]);
 
 	router.adder(tests, Route(website, "some/path", 200, false), RouterRequest("abc.example.com", "some/path", 80));

@@ -9,7 +9,7 @@ struct BenchMarkItems {
 	IWebSite[] allWebsites;
 
 	// not used specifically in here, but is else where
-	CommandSequenceReader!dstring* csufReader;
+	CommandSequenceReader!string* csufReader;
 
 	string toString() {
 		string ret;
@@ -135,12 +135,12 @@ BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariable
 	uint offsetForEntry, offsetForRequest;
 	root.fillText;
 
-	dchar[] buffer;
+	char[] buffer;
 	buffer.length = 1024;
 	buffer[] = '_';
 	buffer[0] = '/';
 
-	import std.utf : byDchar, count;
+	import std.utf : byChar, count;
 	uint tL;
 
 	// this adds the tree for route definitions into the return data
@@ -151,7 +151,7 @@ BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariable
 			buffer[0] = '/';
 			tL=1;
 			
-			foreach(c; root.constant.byDchar) {
+			foreach(c; root.constant.byChar) {
 				buffer[tL] = c;
 				tL++;
 			}
@@ -173,7 +173,7 @@ BenchMarkItems createBenchMarks(uint maxEntries, uint maxParts, uint maxVariable
 				buffer[0] = '/';
 				tL=1;
 
-				foreach(c; root.constant.byDchar) {
+				foreach(c; root.constant.byChar) {
 					buffer[tL] = c;
 					tL++;
 				}
@@ -341,10 +341,10 @@ private {
 		}
 	}
 
-	void flattenTreeSpec(InternalTreeEntry* parent, uint offset, dchar[] buffer,
+	void flattenTreeSpec(InternalTreeEntry* parent, uint offset, char[] buffer,
 		ref BenchMarkItems ret, ref uint offsetForEntry, bool forTests,
 		uint maxNumParts, uint numPartsSoFar, ref uint offsetForRequest) {
-		import std.utf : count, byDchar;
+		import std.utf : count, byChar;
 		import std.random : uniform, uniform01;
 		
 		bool generateNewData;
@@ -370,7 +370,7 @@ private {
 					string word = words[uniform(0, words.length)];
 					
 					buffer[offsetT++] = '/';
-					foreach(c; word.byDchar) {
+					foreach(c; word.byChar) {
 						buffer[offsetT++] = c;
 					}
 				}
@@ -378,7 +378,7 @@ private {
 				flattenTreeSpecEntry(buffer[0 .. offsetT], ret, offsetForEntry, 
 					forTests, maxNumParts, numPartsSoFar+1, offsetForRequest);
 			} else if (!forTests) {
-				buffer[offsetT .. offsetT + 2] = "/*"d;
+				buffer[offsetT .. offsetT + 2] = "/*";
 				offsetT += 2;
 				flattenTreeSpecEntry(buffer[0 .. offsetT], ret, offsetForEntry, 
 					forTests, maxNumParts, numPartsSoFar+1, offsetForRequest);
@@ -393,7 +393,7 @@ private {
 				uint len = cast(uint)(word.length + 1);
 				
 				buffer[offset++] = '/';
-				foreach(c; word.byDchar) {
+				foreach(c; word.byChar) {
 					buffer[offset++] = c;
 				}
 				
@@ -404,7 +404,7 @@ private {
 				
 				buffer[offset++] = '/';
 				buffer[offset++] = ':';
-				foreach(c; parent.varName.byDchar) {
+				foreach(c; parent.varName.byChar) {
 					buffer[offset++] = c;
 				}
 				
@@ -416,7 +416,7 @@ private {
 			
 			uint len = cast(uint)parent.constant.count;
 			buffer[offset++] = '/';
-			foreach(c; parent.constant.byDchar) {
+			foreach(c; parent.constant.byChar) {
 				buffer[offset++] = c;
 			}
 			
@@ -438,7 +438,7 @@ private {
 		}
 	}
 	
-	void flattenTreeSpecEntry(dchar[] buffer, ref BenchMarkItems ret, ref uint offsetForEntry,
+	void flattenTreeSpecEntry(char[] buffer, ref BenchMarkItems ret, ref uint offsetForEntry,
 		bool forTests, uint maxNumParts, uint numPartsSoFar, ref uint offsetForRequest) {
 
 		if (!forTests && offsetForEntry == ret.items.length) {

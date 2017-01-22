@@ -23,8 +23,13 @@ interface IConnection {
  */
 interface IRouter {
     void addRoute(Route);
-    void optimize();
+    void preuse();
 	Nullable!Route run(RouterRequest, ushort statusCode=200);
+}
+
+/// Consider this a "second" router for benchmarking
+interface IRouterOptimizable {
+	void preuseOptimize();
 }
 
 /**
@@ -129,7 +134,7 @@ struct WebSiteAddressPort {
 }
 
 struct WebsiteAddress {
-    dstring hostname;
+    string hostname;
 	WebSiteAddressPort port;
 
     bool supportsSSL;
@@ -144,7 +149,7 @@ struct WebsiteAddress {
 
 struct Route {
     IWebSite website;
-    dstring path;
+    string path;
 
     /**
      * If this route is "special" e.g. error handler
@@ -158,13 +163,13 @@ struct Route {
 }
 
 struct RouterRequest {
-    dstring hostname;
-    dstring path;
+    string hostname;
+    string path;
 
     uint port;
     bool useSSL;
 
 	// we don't actually use this, so ignore it for now
-    dstring[] fieldsKeys;
-    dstring[] fieldsValues;
+    string[] fieldsKeys;
+    string[] fieldsValues;
 }

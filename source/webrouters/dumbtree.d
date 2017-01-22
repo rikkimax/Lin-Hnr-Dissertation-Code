@@ -6,7 +6,7 @@ import std.typecons : Nullable;
 /**
  *
  */
-class DumbTreeRouter : IRouter {
+class DumbTreeRouter : IRouter, IRouterOptimizable {
 	size_t totalNumberOfElements;
 	DumbTreeRoot[] roots;
 	
@@ -39,7 +39,7 @@ class DumbTreeRouter : IRouter {
 		parentInit = parent;
 		
 	F1: foreach(part; newRoute.path.splitter('/')) {
-			if (part == "*"d) {
+			if (part == "*") {
 				// ok we're at an end
 				assert(parent.catchAllEndRoute.isNull);
 				parent.catchAllEndRoute = Nullable!Route(newRoute);
@@ -73,7 +73,8 @@ class DumbTreeRouter : IRouter {
 		}
 	}
 	
-	void optimize() {}
+	void preuse() {}
+	void preuseOptimize() {}
 	
 	Nullable!Route run(RouterRequest routeToFind, ushort toFindStatusCode=200) {
 		import std.algorithm : splitter;
@@ -81,7 +82,7 @@ class DumbTreeRouter : IRouter {
 		
 		Nullable!DumbTreeElement* parent, parentCatchAll, parentCatchAll2;
 		Nullable!Route* lastCatchAll, lastRoute;
-		auto pathLeft = routeToFind.path.splitter("/"d);
+		auto pathLeft = routeToFind.path.splitter("/");
 		auto pathLeftCatchAll = pathLeft;
 
 	F1: foreach(ref root; roots) {
@@ -231,7 +232,7 @@ private {
 	}
 	
 	struct DumbTreeElement {
-		dstring constant;
+		string constant;
 		Nullable!Route endRoute;
 		Nullable!Route catchAllEndRoute;
 		

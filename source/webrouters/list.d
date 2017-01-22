@@ -23,7 +23,7 @@ class ListRouter : IRouter {
 	 * But is required to make things work correctly :/
 	 * Otherwise routes will be out of order
 	 */
-	void optimize() {
+	void preuse() {
 		import std.algorithm : multiSort;
 
 		multiSort!(
@@ -78,7 +78,7 @@ class ListRouter : IRouter {
 	}
 }
 
-bool isHostnameMatch(dstring from, dstring to) {
+bool isHostnameMatch(string from, string to) {
 	if (from[0] == '*') {
 		if (to.length >= from.length) {
 			return to[$-(from.length-2) .. $] == from[2 .. $];
