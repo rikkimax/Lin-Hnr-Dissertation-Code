@@ -7,7 +7,7 @@ import std.typecons : Nullable;
  *
  */
 class DumbTreeRouter : IRouter, IRouterOptimizable {
-	size_t totalNumberOfElements;
+	size_t totalNumberOfElements, depthOfElements;
 	DumbTreeRoot[] roots;
 	
 	this() {}
@@ -37,26 +37,31 @@ class DumbTreeRouter : IRouter, IRouterOptimizable {
 		}
 		
 		parentInit = parent;
-		
+		size_t depthOfElement;
+
 	F1: foreach(part; newRoute.path.splitter('/')) {
 			if (part == "*") {
 				// ok we're at an end
 				assert(parent.catchAllEndRoute.isNull);
 				parent.catchAllEndRoute = Nullable!Route(newRoute);
 				totalNumberOfElements++;
+				depthOfElement++;
 				return;
 			} else if (part.length > 0 && part[0] == ':') {
 				if (parent.variableRoute is null) {
 					parent.variableRoute = new Nullable!DumbTreeElement(DumbTreeElement());
 					parent = parent.variableRoute;
 					totalNumberOfElements++;
+					depthOfElement++;
 				} else {
 					parent = parent.variableRoute;
+					depthOfElement++;
 				}
 			} else {
 				foreach(ref child; parent.children) {
 					if (child.constant == part) {
 						parent = &child;
+						depthOfElement++;
 						continue F1;
 					}
 				}
@@ -65,10 +70,14 @@ class DumbTreeRouter : IRouter, IRouterOptimizable {
 				parent = &parent.children[$-1];
 				parent.constant = part;
 				totalNumberOfElements++;
+				depthOfElement++;
 			}
 		}
 		
 		if (parent !is parentInit) {
+			if (depthOfElement > depthOfElements)
+				depthOfElements = depthOfElement;
+
 			parent.endRoute = newRoute;
 		}
 	}
