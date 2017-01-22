@@ -12,7 +12,7 @@ T canAdd(T:IRouter)() {
 		//router.dummyData_2(tests);
 		router.dummyData_3(tests);
 
-		router.optimize;
+		router.preuse;
 
 		foreach(test; tests) {
 			auto result = router.run(test.request);
@@ -22,6 +22,21 @@ T canAdd(T:IRouter)() {
 				writeln(__LINE__, ": ", result);
 				writeln(__LINE__, ": ", test);
 				assert(0);
+			}
+		}
+
+		if (IRouterOptimizable o = cast(IRouterOptimizable)router) {
+			o.preuseOptimize;
+			
+			foreach(test; tests) {
+				auto result = router.run(test.request);
+				
+				if (test.willSucceed && result.isNull) {
+					import std.stdio;
+					writeln(__LINE__, ": ", result);
+					writeln(__LINE__, ": ", test);
+					assert(0);
+				}
 			}
 		}
 
