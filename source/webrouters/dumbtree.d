@@ -348,6 +348,20 @@ private {
 		IWebSite website;
 		int statusCode;
 		Nullable!DumbTreeElement root;
+
+		string toString() {
+			import std.conv : text;
+			string ret;
+			ret ~= "statusCode: " ~ statusCode.text ~ "\n";
+
+			ret ~= "addresses:\n";
+			foreach(addr; website.addresses) {
+				ret ~= " - " ~ addr.toString() ~ "\n";
+			}
+
+			ret ~= "root: \n" ~ root.get.toString(" |");
+			return ret;
+		}
 	}
 	
 	struct DumbTreeElement {
@@ -357,6 +371,30 @@ private {
 		
 		Nullable!DumbTreeElement* variableRoute;
 		Nullable!DumbTreeElement[] children;
+
+		string toString(string prefix) {
+			import std.conv : text;
+			string ret;
+
+			ret ~= prefix ~ "-| - " ~ constant ~ "\n";
+			ret ~= prefix ~ " | endRoute: " ~ (endRoute.isNull ? "[null]" : endRoute.get.text) ~ "\n";
+			ret ~= prefix ~ " | catchAllEndRoute: " ~ (catchAllEndRoute.isNull ? "[null]" : catchAllEndRoute.get.text) ~ "\n";
+
+			foreach(ref child; children) {
+				ret ~= prefix ~ " |--|\n";
+				ret ~= child.get.toString(prefix ~ " |-");
+			}
+
+			if (variableRoute !is null && !variableRoute.isNull) {
+				ret ~= prefix ~ " | variableRoute:\n";
+				ret ~= prefix ~ " |--|\n";
+				ret ~= variableRoute.get.toString(prefix ~ " |-");
+			} else {
+				ret ~= prefix ~ " | variableRoute: [null]\n";
+			}
+
+			return ret;
+		}
 	}
 	
 	unittest {
