@@ -8,7 +8,11 @@ import std.typecons : Nullable;
  */
 class DumbTreeRouter : IRouter, IRouterOptimizable {
 	size_t totalNumberOfElements, depthOfElements;
-	DumbTreeRoot[] roots;
+	DumbTreeRoot[] unoptimizedRoots, optimizedRoots;
+	Nullable!DumbTreeElement[] optimizedElements;
+	Nullable!DumbTreeElement*[] optimizedDepthElements;
+	size_t[] optimizedDepthElementProperty;
+	bool sinceLastOptimizationHaveAdded;
 	
 	this() {}
 	
@@ -21,18 +25,18 @@ class DumbTreeRouter : IRouter, IRouterOptimizable {
 		// we need to determine which root we are talking about
 		// keep in mind we don't attempt to "merge" websites
 		
-		foreach(ref root; roots) {
+		foreach(ref root; unoptimizedRoots) {
 			if (root.website == newRoute.website && root.statusCode == newRoute.code) {
 				parent = &root.root;
 			}
 		}
 		
 		if (parent is null) {
-			roots.length++;
-			roots[$-1].root = DumbTreeElement();
-			roots[$-1].statusCode = newRoute.code;
-			roots[$-1].website = newRoute.website;
-			parent = &roots[$-1].root;
+			unoptimizedRoots.length++;
+			unoptimizedRoots[$-1].root = DumbTreeElement();
+			unoptimizedRoots[$-1].statusCode = newRoute.code;
+			unoptimizedRoots[$-1].website = newRoute.website;
+			parent = &unoptimizedRoots[$-1].root;
 			totalNumberOfElements++;
 		}
 		
@@ -78,12 +82,110 @@ class DumbTreeRouter : IRouter, IRouterOptimizable {
 			if (depthOfElement > depthOfElements)
 				depthOfElements = depthOfElement;
 
+			sinceLastOptimizationHaveAdded = true;
 			parent.endRoute = newRoute;
 		}
 	}
 	
 	void preuse() {}
-	void preuseOptimize() {}
+
+	void preuseOptimize() {
+		if (sinceLastOptimizationHaveAdded) {
+			sinceLastOptimizationHaveAdded = false;
+
+			optimizedRoots.length = unoptimizedRoots.length;
+			optimizedRoots[] = DumbTreeRoot.init;
+			optimizedElements.length = totalNumberOfElements + 1; // +1 #lazy
+			optimizedElements[] = Nullable!DumbTreeElement.init;
+			optimizedDepthElements.length = (depthOfElements * 2) + 2; // +1 #lazy
+			optimizedDepthElementProperty.length = depthOfElements + 1; // +1 #lazy
+
+			DumbTreeRoot* currentRoot;
+			Nullable!DumbTreeElement*[] oldRootDepthElement, newRootDepthElement;
+			size_t offsetIntoOptimizedElements;
+			ptrdiff_t realLengthOfDepthElements;
+			oldRootDepthElement = optimizedDepthElements[0 .. depthOfElements + 1];
+			newRootDepthElement = optimizedDepthElements[depthOfElements + 1 .. $];
+
+			foreach(i, ref oldRoot; unoptimizedRoots) {
+				currentRoot = &optimizedRoots[i];
+				currentRoot.website = oldRoot.website;
+				currentRoot.statusCode = oldRoot.statusCode;
+				currentRoot.root = Nullable!DumbTreeElement(DumbTreeElement.init);
+
+				oldRootDepthElement[0] = &oldRoot.root;
+				newRootDepthElement[0] = &currentRoot.root;
+				optimizedDepthElementProperty[0] = 0;
+				realLengthOfDepthElements = 0;
+
+				Nullable!DumbTreeElement* oldParent, newParent, oldChild, newChild;
+				do {
+					oldParent = oldRootDepthElement[realLengthOfDepthElements];
+					newParent = newRootDepthElement[realLengthOfDepthElements];
+					size_t currentProperty = optimizedDepthElementProperty[realLengthOfDepthElements];
+					size_t realLengthOfDepthElementsT = realLengthOfDepthElements;
+
+					if (currentProperty == 0) {
+						// handles:
+						//  - constant
+						//  - endRoute
+						//  - catchAllEndRoute
+						//  - variableRoute
+
+						if (oldParent.children.length > 0) {
+							// we copy the children array now to keep locality + so we don't have to deal with it later
+							newParent.children = optimizedElements[offsetIntoOptimizedElements .. offsetIntoOptimizedElements + oldParent.children.length];
+							offsetIntoOptimizedElements += oldParent.children.length;
+						}
+
+						// TODO: umm shouldn't we copy this into a new buffer?!!!!!!
+						// especially for string reuse in mind
+						newParent.constant = oldParent.constant;
+						// nothing to do here
+						newParent.endRoute = oldParent.endRoute;
+						// nothing to do here
+						newParent.catchAllEndRoute = oldParent.catchAllEndRoute;
+
+						oldChild = oldParent.variableRoute;
+						if (oldChild !is null && !oldChild.isNull) {
+							newParent.variableRoute = &optimizedElements[offsetIntoOptimizedElements];
+							*newParent.variableRoute = Nullable!DumbTreeElement(DumbTreeElement.init);
+							newChild = newParent.variableRoute;
+							offsetIntoOptimizedElements++;
+
+							realLengthOfDepthElements++;
+							oldRootDepthElement[realLengthOfDepthElements] = oldChild;
+							newRootDepthElement[realLengthOfDepthElements] = newChild;
+							optimizedDepthElementProperty[realLengthOfDepthElements] = 0;
+						}
+
+						currentProperty = 1;
+					} else if (oldParent.children.length > 0) {
+						// handles:
+						//  - children
+						if (currentProperty <= oldParent.children.length) {
+							oldChild = &oldParent.children[currentProperty-1];
+							newParent.children[currentProperty-1] = Nullable!DumbTreeElement(DumbTreeElement.init);
+							newChild = &newParent.children[currentProperty-1];
+
+							realLengthOfDepthElements++;
+							oldRootDepthElement[realLengthOfDepthElements] = oldChild;
+							newRootDepthElement[realLengthOfDepthElements] = newChild;
+							optimizedDepthElementProperty[realLengthOfDepthElements] = 0;
+
+							currentProperty++;
+						} else {
+							realLengthOfDepthElements--;
+						}
+					} else {
+						realLengthOfDepthElements--;
+					}
+
+					optimizedDepthElementProperty[realLengthOfDepthElementsT] = currentProperty;
+				} while (realLengthOfDepthElements >= 0);
+			}
+		}
+	}
 	
 	Nullable!Route run(RouterRequest routeToFind, ushort toFindStatusCode=200) {
 		import std.algorithm : splitter;
@@ -93,6 +195,14 @@ class DumbTreeRouter : IRouter, IRouterOptimizable {
 		Nullable!Route* lastCatchAll, lastRoute;
 		auto pathLeft = routeToFind.path.splitter("/");
 		auto pathLeftCatchAll = pathLeft;
+
+		DumbTreeRoot[] roots;
+
+		if (sinceLastOptimizationHaveAdded) {
+			roots = unoptimizedRoots;
+		} else {
+			roots = optimizedRoots;
+		}
 
 	F1: foreach(ref root; roots) {
 			if (root.statusCode == toFindStatusCode) {
