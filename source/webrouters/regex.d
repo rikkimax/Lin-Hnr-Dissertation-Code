@@ -106,7 +106,7 @@ class DumbRegexRouter : IRouter, IRouterOptimizable {
 			root.routes.sort!((ref a, ref b) { return isRouteLess(b.route, a.route); });
 
 			// funny enough this regex implementation capable of merging sets of
-			//  patterns once compiled is easier then manually combining them!
+			//  patterns is easier then manually combining them!
 
 			string[] theRegexes;
 			theRegexes.length = root.routes.length;
