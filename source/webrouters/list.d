@@ -90,51 +90,6 @@ bool isHostnameMatch(string from, string to) {
 	}
 }
 
-bool isRouteLess(ref Route a, ref Route b) {
-	import std.algorithm : splitter;
-	import std.range : zip;
-	import std.string : indexOf;
-
-	auto from = a.path;
-	auto to = b.path;
-
-	// TRUE= /abc versus /abc/def
-	// FALSE= /abc/* versus /abc/def
-
-	if (from == to)
-		return false;
-
-	if (from[$-1] == '*' && to[$-1] == '*')
-		return from.length < to.length;
-	else if (from[$-1] == '*')
-		return false;
-	else if (to[$-1] == '*')
-		return true;
-	else {
-		// inaction
-	}
-
-	foreach(parta, partb; zip(from.splitter('/'), to.splitter('/'))) {
-		if (parta is null) {
-			return false;
-		} else if (partb is null)
-			return true;
-
-		if (from[$-1] == '*' && to[$-1] == '*') {
-			return false;
-		} else if (parta[0] == ':' || partb[0] == ':') {
-			if (parta[0] != ':')
-				return false;
-		} else if (parta == partb) {
-			// do nothing
-		} else {
-			return false;
-		}
-	}
-
-	return true;
-}
-
 unittest {
 	import webrouters.tests;
 	import std.stdio : writeln;

@@ -4,13 +4,14 @@ import webrouters.util;
 import std.regex;
 import std.typecons : Nullable;
 
-class DumbRegexRouter : IRouter {
+class DumbRegexRouter : IRouter, IRouterOptimizable {
+	import std.algorithm : splitter;
+
 	RegexRoot[] roots;
 	char[] buffer;
 	size_t bufferOffset;
 
 	void addRoute(Route newRoute) {
-		import std.algorithm : splitter;
 		import std.string : indexOf;
 		
 		// we need to determine which root we are talking about
@@ -37,6 +38,14 @@ class DumbRegexRouter : IRouter {
 				return;
 			}
 		}
+
+		// lets make sure we know for a fact that we have changed!
+		root.regex.nullify;
+
+		// now to produce the regex in the form of:
+		//     ^/user/([^/]+)/(\d+)$
+		//     ^/user/(\d+)$
+		//     ^/user/([^/]+)$
 
 		char[] theRegex;
 		// okay we need to construct the regex for the given route up.
@@ -80,20 +89,39 @@ class DumbRegexRouter : IRouter {
 			partOffset++;
 		}
 
-
-		bufferOffset++;
+		bufferOffset += 3;
 		theRegex = buffer[bufferOffsetStart .. bufferOffset];
-		theRegex[$-1] = '$';
+		theRegex[$-3 .. $] = "/?$";
 
-		root.routes ~= RegexElement(newRoute, regex(theRegex));
+		root.routes ~= RegexElement(newRoute, regex(theRegex), cast(string)theRegex);
 	}
 
 	void preuse() {}
 
+	void preuseOptimize() {
+		import std.algorithm.sorting : sort;
+
+		foreach(ref root; roots) {
+			// we'll optimize all paths with a catch all to end of the array first off
+			root.routes.sort!((ref a, ref b) { return isRouteLess(b.route, a.route); });
+
+			// funny enough this regex implementation capable of merging sets of
+			//  patterns once compiled is easier then manually combining them!
+
+			string[] theRegexes;
+			theRegexes.length = root.routes.length;
+
+			foreach(i, ref routeE; root.routes) {
+				theRegexes[i] = routeE.theRegexString;
+			}
+
+			root.regex = regex(theRegexes);
+		}
+	}
+
 	Nullable!Route run(RouterRequest routeToFind, ushort toFindStatusCode=200) {
-		import std.algorithm : splitter;
 		import webrouters.list : isHostnameMatch;
-		
+
 		RegexRoot* parent, parentCatchAll;
 		Route* lastCatchAll, lastRoute;
 		auto pathLeft = routeToFind.path.splitter("/");
@@ -129,13 +157,19 @@ class DumbRegexRouter : IRouter {
 			parent = parentCatchAll;
 		}
 
-		foreach(ref routeE; parent.routes) {
-			// now the path
-			if (matchFirst(routeToFind.path, routeE.regex)) {
-				if (routeE.route.path[$-1] == '*')
-					lastCatchAll = &routeE.route;
-				else
-					lastRoute = &routeE.route;
+		if (parent.regex.isNull) {
+			foreach(ref routeE; parent.routes) {
+				// now the path
+				if (matchFirst(routeToFind.path, routeE.regex)) {
+					if (routeE.route.path[$-1] == '*')
+						lastCatchAll = &routeE.route;
+					else
+						lastRoute = &routeE.route;
+				}
+			}
+		} else {
+			foreach(match; matchAll(routeToFind.path, parent.regex.get)) {
+				lastRoute = &parent.routes[match.whichPattern-1].route;
 			}
 		}
 
@@ -155,6 +189,7 @@ private {
 		IWebSite website;
 		int statusCode;
 		RegexElement[] routes;
+		Nullable!(Regex!char) regex;
 		
 		string toString() {
 			import std.conv : text;
@@ -178,10 +213,11 @@ private {
 	struct RegexElement {
 		Route route;
 		Regex!char regex;
+		string theRegexString;
 
 		string toString(string prefix) {
 			import std.conv : text;
-			return prefix ~ route.text ~ "\n";
+			return prefix ~ route.text ~ " \"" ~ theRegexString ~ "\"\n";
 		}
 	}
 
