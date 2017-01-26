@@ -189,7 +189,6 @@ class DumbTreeRouter : IRouter, IRouterOptimizable {
 	
 	Nullable!Route run(RouterRequest routeToFind, ushort toFindStatusCode=200) {
 		import std.algorithm : splitter;
-		import webrouters.list : isHostnameMatch;
 		
 		Nullable!DumbTreeElement* parent, parentCatchAll, parentCatchAll2;
 		Nullable!Route* lastCatchAll, lastRoute;

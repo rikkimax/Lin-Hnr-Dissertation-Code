@@ -114,6 +114,18 @@ bool isRouteLess(ref Route a, ref Route b) {
 	return true;
 }
 
+bool isHostnameMatch(string from, string to) {
+	if (from[0] == '*') {
+		if (to.length >= from.length) {
+			return to[$-(from.length-2) .. $] == from[2 .. $];
+		}
+		
+		return false;
+	} else {
+		return from == to;
+	}
+}
+
 bool isRouteMatch(string from, string to) {
 	import std.algorithm : splitter;
 	import std.string : indexOf;

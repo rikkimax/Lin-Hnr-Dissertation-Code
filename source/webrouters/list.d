@@ -78,18 +78,6 @@ class ListRouter : IRouter {
 	}
 }
 
-bool isHostnameMatch(string from, string to) {
-	if (from[0] == '*') {
-		if (to.length >= from.length) {
-			return to[$-(from.length-2) .. $] == from[2 .. $];
-		}
-
-		return false;
-	} else {
-		return from == to;
-	}
-}
-
 unittest {
 	import webrouters.tests;
 	import std.stdio : writeln;
