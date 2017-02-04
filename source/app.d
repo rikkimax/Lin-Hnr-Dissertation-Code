@@ -209,7 +209,7 @@ void main(string[] args) {
 					benchmarker.registerRouterImplementation!DumbTreeRouter;
 					break;
 				case DumbRegexRouter.RouterName:
-					//benchmarker.registerRouterImplementation!DumbRegexRouter;
+					benchmarker.registerRouterImplementation!DumbRegexRouter;
 					break;
 			}
 		}
