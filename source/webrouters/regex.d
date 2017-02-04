@@ -7,13 +7,18 @@ import std.typecons : Nullable;
 class DumbRegexRouter : IRouter, IRouterOptimizable {
 	import std.algorithm : splitter;
 
+	enum RouterName = "dumbregex";
+
 	RegexRoot[] roots;
 	char[] buffer;
 	size_t bufferOffset;
 
 	void addRoute(Route newRoute) {
 		import std.string : indexOf;
-		
+
+		if (newRoute.path[0] == '/')
+			newRoute.path = newRoute.path[1 .. $];
+
 		// we need to determine which root we are talking about
 		// keep in mind we don't attempt to "merge" websites
 

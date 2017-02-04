@@ -13,13 +13,18 @@ class DumbTreeRouter : IRouter, IRouterOptimizable {
 	Nullable!DumbTreeElement*[] optimizedDepthElements;
 	size_t[] optimizedDepthElementProperty;
 	bool sinceLastOptimizationHaveAdded;
-	
+
+	enum RouterName = "dumbtree";
+
 	this() {}
 	
 	void addRoute(Route newRoute) {
 		import std.algorithm : splitter;
 		import std.string : indexOf;
-		
+
+		if (newRoute.path[0] == '/')
+			newRoute.path = newRoute.path[1 .. $];
+
 		Nullable!DumbTreeElement* parent, parentInit;
 		
 		// we need to determine which root we are talking about

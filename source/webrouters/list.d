@@ -10,9 +10,13 @@ import std.typecons : Nullable;
  * After all, this has NO optimizations applied to it.
  */
 class ListRouter : IRouter {
+	enum RouterName = "list";
+
 	Route[] allRoutes;
 
 	void addRoute(Route newRoute) {
+		if (newRoute.path[0] == '/')
+			newRoute.path = newRoute.path[1 .. $];
 		allRoutes ~= newRoute;
 	}
 

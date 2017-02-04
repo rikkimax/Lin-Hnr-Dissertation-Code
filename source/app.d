@@ -1,6 +1,11 @@
 import std.stdio;
 import webrouters.benchmark;
+import webrouters.benchmarker;
 import webrouters.defs;
+import webrouters.list : ListRouter;
+import webrouters.dumbtree : DumbTreeRouter;
+import webrouters.regex : DumbRegexRouter;
+import csuf.reader;
 
 void main(string[] args) {
 	import std.getopt;
@@ -8,11 +13,13 @@ void main(string[] args) {
 	import std.algorithm : uniq;
 	import std.path : dirName, baseName;
 	import std.mmfile;
-	import csuf.reader;
 
 	bool generateBenchmarks, runBenchmark;
 	string benchmarkDirectory = "benchmarks";
 	string[] benchmarkLoad = ["benchmarks/*"];
+
+	string[] benchmarkerToLoad = [ListRouter.RouterName, DumbTreeRouter.RouterName, DumbRegexRouter.RouterName];
+	size_t originalSizeOfBenchmarkerToLoad = benchmarkerToLoad.length;
 
 	uint maxEntries, maxParts, maxVariables, maxTests;
 	maxEntries = 1_000_000;
@@ -21,7 +28,9 @@ void main(string[] args) {
 	maxTests = 20;
 
 	MmFile[] loadedBenchmarkFiles;
-	CommandSequenceReader!dstring[] benchmarkFilesCSR;
+	CommandSequenceReader!string[] benchmarkFilesCSR;
+
+	Benchmarker benchmarker;
 
 	try {
 		auto helpInformation = getopt(
@@ -40,10 +49,11 @@ void main(string[] args) {
 			"benchmarkMaxVariables|bmv", "Benchmark max variables, default: 8", &maxVariables,
 			"benchmarkMaxTests|bmt", "Benchmark max tests, default: 20", &maxTests,
 
-			// benchmark loading stuff
+			// benchmarker stuff
 
 			"run", "Runs the benchmark", &runBenchmark,
 			"load", "Load a benchmark file, is a glob, default: benchmarks/*", &benchmarkLoad,
+			"benchmarkLoad|brl", "Adds a router implementation to benchmark, default: all", &benchmarkerToLoad,
 		);
 
 		if (helpInformation.helpWanted) {
@@ -82,6 +92,32 @@ void main(string[] args) {
 			writeln(e.toString);
 		}
 		return;
+	}
+
+	// validate that we know all the asked for router implementations.
+	if (benchmarkerToLoad.length > originalSizeOfBenchmarkerToLoad) {
+		benchmarkerToLoad = benchmarkerToLoad[originalSizeOfBenchmarkerToLoad .. $];
+
+		foreach(bmrtl; benchmarkerToLoad) {
+			switch(bmrtl) {
+				case ListRouter.RouterName:
+				case DumbTreeRouter.RouterName:
+				case DumbRegexRouter.RouterName:
+					break;
+				default:
+					writeln("Unrecognised router implementation ", bmrtl, ".");
+
+					if (verboseMode) {
+						writeln;
+						writeln("Valid ones are:");
+
+						foreach(m; [ListRouter.RouterName, DumbTreeRouter.RouterName, DumbRegexRouter.RouterName]) {
+							writeln(" - ", m);
+						}
+					}
+					return;
+			}
+		}
 	}
 
 	if (generateBenchmarks) {
@@ -140,11 +176,13 @@ void main(string[] args) {
 					}
 					
 					loadedBenchmarkFiles[currentFileToLoad] = mmfile;
-					benchmarkFilesCSR[currentFileToLoad] = CommandSequenceReader!dstring(cast(dstring)mmfile[]);
+					benchmarkFilesCSR[currentFileToLoad] = CommandSequenceReader!string(cast(string)mmfile[]);
 					
 					// ugh do we need to do anything further?
-					auto csr = &benchmarkFilesCSR[currentFileToLoad];
-					
+					version(none) {
+						auto csr = &benchmarkFilesCSR[currentFileToLoad];
+					}
+
 					// probably not at this point
 					// we'd need to figure out the routers first
 					// although setting up all the e.g. websites and routes would be a good thing...
@@ -160,6 +198,24 @@ void main(string[] args) {
 				}
 			}
 		}
+
+		// add each router implementation to test
+		foreach(bmrtl; benchmarkerToLoad) {
+			final switch(bmrtl) {
+				case ListRouter.RouterName:
+					benchmarker.registerRouterImplementation!ListRouter;
+					break;
+				case DumbTreeRouter.RouterName:
+					benchmarker.registerRouterImplementation!DumbTreeRouter;
+					break;
+				case DumbRegexRouter.RouterName:
+					//benchmarker.registerRouterImplementation!DumbRegexRouter;
+					break;
+			}
+		}
+
+		loadBenchmarkerWithTests(&benchmarker, benchmarkFilesCSR);
+		benchmarker.setup();
 
 		if (verboseMode) {
 			writeln(";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
@@ -203,37 +259,137 @@ void createAndStoreBenchmark(string filename, uint maxEntries, uint maxParts, ui
 	write(filename, createBenchmarkCSUF(got));
 }
 
-dstring createBenchmarkCSUF(BenchMarkItems benchmark) {
-	import std.utf : byDchar;
+string createBenchmarkCSUF(BenchMarkItems benchmark) {
 	import std.array : appender;
+	import std.format : sformat;
 
-	auto ret = appender!dstring();
+	auto ret = appender!string();
 	ret.reserve(1_000_000);
 
 	IWebSite lastWebsite;
 
+	char[8] buffer;
+	size_t sinceLastWebsite_num_requests, sinceLastWebsite_len_paths, sinceLastWebsite_len_requests;
+	size_t countTotalEntries;
+
+	foreach(i, item; benchmark.items) {
+		if (lastWebsite !is item.route.website || i == 0) {
+			lastWebsite = item.route.website;
+			countTotalEntries++;
+		}
+	}
+
+	ret ~= ".new HEADER\n";
+	ret ~= ".num_entries ";
+	ret ~= sformat(buffer[0 .. $], "%d", countTotalEntries);
+	ret ~= '\n';
+	
+	lastWebsite = null;
 	foreach(i, item; benchmark.items) {
 		if (lastWebsite !is item.route.website || i == 0) {
 			lastWebsite = item.route.website;
 
-			if (i > 0)
+			if (i > 0) {
+				ret ~= ".num_requests ";
+				ret ~= sformat(buffer[0 .. $], "%d", sinceLastWebsite_num_requests);
 				ret ~= '\n';
-			ret ~= ".new\n"d;
+
+				ret ~= ".len_paths ";
+				ret ~= sformat(buffer[0 .. $], "%d", sinceLastWebsite_len_paths);
+				ret ~= '\n';
+
+				ret ~= ".len_requests ";
+				ret ~= sformat(buffer[0 .. $], "%d", sinceLastWebsite_len_requests);
+				ret ~= '\n';
+				
+				ret ~= '\n';
+			}
+
+			ret ~= ".new\n";
+			sinceLastWebsite_num_requests = 0;
+			sinceLastWebsite_len_paths = 0;
+			sinceLastWebsite_len_requests = 0;
 		}
 
-		foreach(c; item.route.path.byDchar) {
+		sinceLastWebsite_len_paths += item.route.path.length;
+		foreach(c; item.route.path) {
 			ret ~= c;
 		}
 
+		sinceLastWebsite_num_requests += item.requests.length;
 		foreach(request; item.requests) {
 			ret ~= ' ';
 
-			foreach(c; request.path.byDchar) {
+			sinceLastWebsite_len_requests += request.path.length;
+			foreach(c; request.path) {
 				ret ~= c;
 			}
 		}
 		ret ~= '\n';
+
+		ret ~= "..status_code ";
+		ret ~= sformat(buffer[0 .. $], "%d", item.route.code);
+		ret ~= '\n';
+
+		ret ~= "..requiresSSL ";
+		ret ~= item.route.requiresSSL ? "true" : "false";
+		ret ~= '\n';
 	}
 
+	if (sinceLastWebsite_len_paths > 0) {
+		ret ~= ".num_requests ";
+		ret ~= sformat(buffer[0 .. $], "%d", sinceLastWebsite_num_requests);
+		ret ~= '\n';
+		
+		ret ~= ".len_paths ";
+		ret ~= sformat(buffer[0 .. $], "%d", sinceLastWebsite_len_paths);
+		ret ~= '\n';
+		
+		ret ~= ".len_requests ";
+		ret ~= sformat(buffer[0 .. $], "%d", sinceLastWebsite_len_requests);
+		ret ~= '\n';
+	}
+	
 	return ret.data;
+}
+
+void loadBenchmarkerWithTests(Benchmarker* benchmarker, CommandSequenceReader!string[] benchmarkFilesCSR) {
+	import webrouters.tests : DummyWebSite;
+
+	foreach(ref dataset; benchmarkFilesCSR) {
+		size_t totalNumberOfEntries;
+	F2: foreach(ref entry; dataset.entries) {
+			if (entry.commands[0].args.length > 0 && entry.commands[0].args[0] == "HEADER") {
+				foreach(ref cmd; entry.commands[1 .. $]) {
+					if (cmd.name == "num_entries") {
+						totalNumberOfEntries = cmd.get!size_t(0);
+					}
+				}
+				continue F2;
+			}
+
+			writeln(totalNumberOfEntries);
+			IWebSite website = new DummyWebSite([
+					WebsiteAddress("foo.bar", WebSiteAddressPort(80)),
+					WebsiteAddress("foo.bar", WebSiteAddressPort(443), true, true)]);
+
+			import std.stdio;
+
+			foreach(ref info; entry.information) {
+				BenchmarkerTest test;
+				test.website = website;
+				test.path = info.name;
+				test.tests = info.args;
+
+				foreach(cmd; info.commands) {
+					if (cmd.name == "status_code")
+						test.statuscode = cmd.get!ushort(0);
+					else if (cmd.name == "requiresSSL")
+						test.requiresSSL = cmd.args[0] == "true";
+				}
+
+				benchmarker.registerTest(test);
+			}
+		}
+	}
 }
