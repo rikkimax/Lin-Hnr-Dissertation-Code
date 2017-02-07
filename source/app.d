@@ -17,15 +17,17 @@ void main(string[] args) {
 	bool generateBenchmarks, runBenchmark;
 	string benchmarkDirectory = "benchmarks";
 	string[] benchmarkLoad = ["benchmarks/*"];
+	string[] benchmarkOutput;
 
 	string[] benchmarkerToLoad = [ListRouter.RouterName, DumbTreeRouter.RouterName, DumbRegexRouter.RouterName];
 	size_t originalSizeOfBenchmarkerToLoad = benchmarkerToLoad.length;
 
-	uint maxEntries, maxParts, maxVariables, maxTests;
+	uint maxEntries, maxParts, maxVariables, maxTests, benchmarkIterations;
 	maxEntries = 1_000_000;
 	maxParts = 20;
 	maxVariables = 8;
 	maxTests = 20;
+	benchmarkIterations = 10;
 
 	MmFile[] loadedBenchmarkFiles;
 	CommandSequenceReader!string[] benchmarkFilesCSR;
@@ -35,11 +37,12 @@ void main(string[] args) {
 	try {
 		auto helpInformation = getopt(
 			args,
+			"verbose|v", &verboseMode,
 
 			// generic stuff
 
 			"benchmarkDirectory|bd", "Benchmark directory, default: ./benchmarks", &benchmarkDirectory,
-			"verbose|v", &verboseMode,
+			"benchmarkOutput|bo", "Output benchmark files, appends only", &benchmarkOutput,
 
 			// benchmark generatior stuff
 
@@ -54,6 +57,7 @@ void main(string[] args) {
 			"run", "Runs the benchmark", &runBenchmark,
 			"load", "Load a benchmark file, is a glob, default: benchmarks/*", &benchmarkLoad,
 			"benchmarkLoad|brl", "Adds a router implementation to benchmark, default: all", &benchmarkerToLoad,
+			"benchmarkIterations|bri", "Number of iterations to run benchmark for, default: 10", &benchmarkIterations,
 		);
 
 		if (helpInformation.helpWanted) {
@@ -127,7 +131,7 @@ void main(string[] args) {
 			writeln(":::::::::::::::::::::::::::::::::::::::::");
 		}
 
-		createAllBenchmarks(benchmarkDirectory, maxEntries, maxParts, maxVariables, maxTests);
+		createAllBenchmarks(benchmarkDirectory, maxEntries, maxParts, maxVariables, maxTests, benchmarkOutput);
 
 		if (verboseMode) {
 			writeln(";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
@@ -159,7 +163,7 @@ void main(string[] args) {
 		benchmarkFilesCSR.length = countFilesToLoad;
 
 		foreach(toload; benchmarkLoad.uniq) {
-			foreach(file; dirEntries(dirName(toload), baseName(toload), SpanMode.depth)) {
+			foreach(string file; dirEntries(dirName(toload), baseName(toload), SpanMode.depth)) {
 				if (verboseMode) {
 					writeln("-----:::::::");
 					writeln("     loading ", file);
@@ -217,6 +221,24 @@ void main(string[] args) {
 		loadBenchmarkerWithTests(&benchmarker, benchmarkFilesCSR);
 		benchmarker.setup();
 
+		auto results = benchmarker.perform(benchmarkIterations);
+		writeln("unoptimized:");
+		foreach(ref ur; results.unoptimized) {
+			writeln(" ", ur.name);
+			writeln("  average: ", ur.average, " ", ur.average / results.numberOfTests);
+			foreach(diff; ur.timeItTook) {
+				writeln("  - ", diff, " ", diff / results.numberOfTests);
+			}
+		}
+		writeln("optimized:");
+		foreach(ref or; results.optimized) {
+			writeln(" ", or.name);
+			writeln("  average: ", or.average, " ", or.average / results.numberOfTests);
+			foreach(diff; or.timeItTook) {
+				writeln("  - ", diff, " ", diff / results.numberOfTests);
+			}
+		}
+
 		if (verboseMode) {
 			writeln(";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
 			writeln(";           Benchmark runner            ;");
@@ -225,12 +247,14 @@ void main(string[] args) {
 	}
 }
 
-void createAllBenchmarks(string directory, uint maxEntries, uint maxParts, uint maxVariables, uint maxTests) {
+void createAllBenchmarks(string directory, uint maxEntries, uint maxParts, uint maxVariables, uint maxTests, string[] benchmarkOutput) {
 	import core.memory : GC;
 	import std.path : buildPath;
 
-	foreach(i, dst; [directory.buildPath("a.csuf"), directory.buildPath("b.csuf")]) {
+	foreach(i, dst; benchmarkOutput) {
 		import std.stdio;
+
+		dst = directory.buildPath(dst);
 
 		if (verboseMode) {
 			writeln(i, ": filename(\"", dst, "\")");
@@ -247,7 +271,7 @@ void createAllBenchmarks(string directory, uint maxEntries, uint maxParts, uint 
 }
 
 void createAndStoreBenchmark(string filename, uint maxEntries, uint maxParts, uint maxVariables, uint maxTests) {
-	import std.file : write;
+	import std.file : append;
 
 	auto got = createBenchMarks(maxEntries, maxParts, maxVariables, maxTests);
 
@@ -256,7 +280,7 @@ void createAndStoreBenchmark(string filename, uint maxEntries, uint maxParts, ui
 		writeln("\t", "websites(", got.allWebsites.length, ")");
 	}
 
-	write(filename, createBenchmarkCSUF(got));
+	append(filename, createBenchmarkCSUF(got));
 }
 
 string createBenchmarkCSUF(BenchMarkItems benchmark) {
@@ -368,12 +392,9 @@ void loadBenchmarkerWithTests(Benchmarker* benchmarker, CommandSequenceReader!st
 				continue F2;
 			}
 
-			writeln(totalNumberOfEntries);
 			IWebSite website = new DummyWebSite([
 					WebsiteAddress("foo.bar", WebSiteAddressPort(80)),
 					WebsiteAddress("foo.bar", WebSiteAddressPort(443), true, true)]);
-
-			import std.stdio;
 
 			foreach(ref info; entry.information) {
 				BenchmarkerTest test;

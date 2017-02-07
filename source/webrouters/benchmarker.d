@@ -30,7 +30,8 @@ struct Benchmarker {
 			allTests.length += 1024;
 		}
 
-		allTests[allTestsRealLength++] = test;
+		allTests[allTestsRealLength] = test;
+		allTestsRealLength++;
 	}
 
 	void setup() {
@@ -62,6 +63,59 @@ struct Benchmarker {
 			(cast(IRouterOptimizable)router).preuseOptimize();
 		}
 	}
+
+	BenchmarkResults perform(uint numberOfIterations) {
+		BenchmarkResults ret;
+		ret.numberOfTests = allTestsRealLength;
+
+		ret.unoptimized.length = routerInstances.length;
+		ret.optimized.length = routerOptimizedInstances.length;
+
+		foreach(i, uor; routerInstances) {
+			ret.unoptimized[i].name = routerNames[i];
+			ret.unoptimized[i].timeItTook.length = numberOfIterations;
+			performTest(uor, numberOfIterations, ret.unoptimized[i]);
+		}
+
+		foreach(i, or; routerOptimizedInstances) {
+			ret.optimized[i].name = routerNamesOptimized[i];
+			ret.optimized[i].timeItTook.length = numberOfIterations;
+			performTest(or, numberOfIterations, ret.optimized[i]);
+		}
+
+		return ret;
+	}
+
+	private {
+		void performTest(IRouter router, uint numberOfIterations, ref BenchmarkResult result) {
+			import std.datetime : Clock;
+			import core.time : Duration;
+
+			foreach(i; 0 .. numberOfIterations) {
+				auto start = Clock.currTime;
+
+				foreach(j, ref test; allTests[0 .. allTestsRealLength]) {
+					RouterRequest request;
+
+					request.hostname = test.website.addresses[0].hostname;
+					assert(!test.website.addresses[0].port.isSpecial);
+					request.port = test.website.addresses[0].port.value;
+
+					request.path = test.path;
+					request.useSSL = test.requiresSSL;
+
+					router.run(request, test.statuscode);
+				}
+
+				auto end = Clock.currTime;
+				Duration diff = cast(Duration)(end - start);
+				result.timeItTook[i] = diff;
+				result.average += diff;
+			}
+
+			result.average = result.average / numberOfIterations;
+		}
+	}
 }
 
 struct BenchmarkerTest {
@@ -72,4 +126,18 @@ struct BenchmarkerTest {
 
 	ushort statuscode;
 	bool requiresSSL;
+}
+
+struct BenchmarkResults {
+	BenchmarkResult[] unoptimized, optimized;
+	size_t numberOfTests;
+}
+
+struct BenchmarkResult {
+	import core.time : Duration;
+
+	string name;
+	Duration[] timeItTook;
+
+	Duration average;
 }
