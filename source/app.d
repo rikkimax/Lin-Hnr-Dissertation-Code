@@ -303,11 +303,6 @@ string createBenchmarkCSUF(BenchMarkItems benchmark) {
 		}
 	}
 
-	ret ~= ".new HEADER\n";
-	ret ~= ".num_entries ";
-	ret ~= sformat(buffer[0 .. $], "%d", countTotalEntries);
-	ret ~= '\n';
-	
 	lastWebsite = null;
 	foreach(i, item; benchmark.items) {
 		if (lastWebsite !is item.route.website || i == 0) {
@@ -381,17 +376,7 @@ void loadBenchmarkerWithTests(Benchmarker* benchmarker, CommandSequenceReader!st
 	import webrouters.tests : DummyWebSite;
 
 	foreach(ref dataset; benchmarkFilesCSR) {
-		size_t totalNumberOfEntries;
 	F2: foreach(ref entry; dataset.entries) {
-			if (entry.commands[0].args.length > 0 && entry.commands[0].args[0] == "HEADER") {
-				foreach(ref cmd; entry.commands[1 .. $]) {
-					if (cmd.name == "num_entries") {
-						totalNumberOfEntries = cmd.get!size_t(0);
-					}
-				}
-				continue F2;
-			}
-
 			IWebSite website = new DummyWebSite([
 					WebsiteAddress("foo.bar", WebSiteAddressPort(80)),
 					WebsiteAddress("foo.bar", WebSiteAddressPort(443), true, true)]);
