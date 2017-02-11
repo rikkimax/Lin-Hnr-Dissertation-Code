@@ -47,8 +47,10 @@ struct Benchmarker {
 		}
 
 		void addTests(IRouter router) {
-			foreach(test; allTests[0 .. allTestsRealLength]) {
-				router.addRoute(Route(test.website, test.path, test.statuscode, test.requiresSSL));
+			if (router.maximumNumberRoutes >= allTestsRealLength) {
+				foreach(test; allTests[0 .. allTestsRealLength]) {
+					router.addRoute(Route(test.website, test.path, test.statuscode, test.requiresSSL));
+				}
 			}
 		}
 
