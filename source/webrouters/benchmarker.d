@@ -71,16 +71,26 @@ struct Benchmarker {
 		ret.unoptimized.length = routerInstances.length;
 		ret.optimized.length = routerOptimizedInstances.length;
 
-		foreach(i, uor; routerInstances) {
-			ret.unoptimized[i].name = routerNames[i];
-			ret.unoptimized[i].timeItTook.length = numberOfIterations;
-			performTest(uor, numberOfIterations, ret.unoptimized[i]);
+		size_t i;
+		foreach(uor; routerInstances) {
+			if (uor.maximumNumberRoutes >= allTestsRealLength) {
+				ret.unoptimized[i].name = routerNames[i];
+				ret.unoptimized[i].timeItTook.length = numberOfIterations;
+				performTest(uor, numberOfIterations, ret.unoptimized[i]);
+				i++;
+			} else
+				ret.unoptimized.length--;
 		}
 
-		foreach(i, or; routerOptimizedInstances) {
-			ret.optimized[i].name = routerNamesOptimized[i];
-			ret.optimized[i].timeItTook.length = numberOfIterations;
-			performTest(or, numberOfIterations, ret.optimized[i]);
+		i = 0;
+		foreach(or; routerOptimizedInstances) {
+			if (or.maximumNumberRoutes >= allTestsRealLength) {
+				ret.optimized[i].name = routerNamesOptimized[i];
+				ret.optimized[i].timeItTook.length = numberOfIterations;
+				performTest(or, numberOfIterations, ret.optimized[i]);
+				i++;
+			} else
+				ret.optimized.length--;
 		}
 
 		return ret;

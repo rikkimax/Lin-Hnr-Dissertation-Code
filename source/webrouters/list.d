@@ -14,6 +14,8 @@ class ListRouter : IRouter {
 
 	Route[] allRoutes;
 
+	ulong maximumNumberRoutes() { return size_t.max; }
+
 	void addRoute(Route newRoute) {
 		if (newRoute.path[0] == '/')
 			newRoute.path = newRoute.path[1 .. $];

@@ -13,6 +13,8 @@ class DumbRegexRouter : IRouter, IRouterOptimizable {
 	char[] buffer;
 	size_t bufferOffset;
 
+	ulong maximumNumberRoutes() { return ushort.max; }
+
 	void addRoute(Route newRoute) {
 		import std.string : indexOf;
 
