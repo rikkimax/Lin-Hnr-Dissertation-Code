@@ -6,22 +6,29 @@ auto output = appender!(char[])();
 void main() {
 	output.reserve(1024 * 1024 * 8);	
 
-	/* */
+	version(Bash) {
+		/* */
 
-	output ~= "### This file is generated from create_script.d ###\n";
-	output ~= "###              Do not run.                    ###\n";
-	output ~= "###              Do not modify.                 ###\n";
-	output ~= '\n';
-	output ~= "# Performs cleanup from previous sets\n";
-	output ~= "rm -rf benchmarks\n";
-	output ~= "mkdir benchmarks\n";
-	output ~= '\n';
+		output ~= "### This file is generated from create_script.d ###\n";
+		output ~= "###              Do not run.                    ###\n";
+		output ~= "###              Do not modify.                 ###\n";
+		output ~= '\n';
+		output ~= "# Performs cleanup from previous sets\n";
+		output ~= "rm -rf benchmarks\n";
+		output ~= "mkdir benchmarks\n";
+		output ~= '\n';
 
-	output ~= "## Creation logic goes here ##\n";
-	output ~= '\n';
+		output ~= "## Creation logic goes here ##\n";
+		output ~= '\n';
+	} else version(Batch) {}
+
 	logic_create();
-
-	write("create.sh", output.data);
+	
+	version(Bash) {
+		write("create.sh", output.data);
+	} else version(Batch) {
+		write("create.bat", output.data);
+	}
 
 	/* */
 
@@ -49,18 +56,25 @@ void outputCreateCommand(uint testId, uint testSitesId, uint maxEntries, uint ma
 	// $ ./code --bg --bme 10 --bmp 10 --bmv 10 --bmt 10 --bo test_1.csuf
 	
 	char[1024] buffer;
-	output ~= buffer[].sformat("./code --bg --bme %d --bmp %d --bmv %d --bmt %d --bo set_%d_sites_%d.csuf",
-					maxEntries, maxParts, maxVariables, maxTests, testId, testSitesId);
+	version(Bash) {
+		output ~= buffer[].sformat("./code --bg --bme %d --bmp %d --bmv %d --bmt %d --bmi %d --bo 
+set_%d_sites_%d.csuf",
+			maxEntries, maxParts, maxVariables, maxTests, testSitesId, testId, testSitesId);
+	} else version(Batch) {
+		output ~= buffer[].sformat("code --bg --bme %d --bmp %d --bmv %d --bmt %d --bmi %d --bo set_%d_sites_%d.csuf",
+			maxEntries, maxParts, maxVariables, maxTests, testSitesId, testId, testSitesId);
+
+	}
 	output ~= '\n';
 }
 
 static {
 	uint[]
-		EntriesArray   = [10, 20, 50, 100, 200, 1000, 10_000, 100_000, 200_000, 1_000_000],
+		EntriesArray   = [10, 20, 50, 100, 200, 1000, 10_000, 100_000/+, 200_000, 1_000_000+/],
 		PartsArray     = [5,  10, 20, 30],
 		VariablesArray = [4,  10, 20],
 		TestsArray     = [4,  10, 20],
-		TestsSiteCount = [1,  2,  3,  5,   10,  20,   30,     100,     200,     300,     500, 1_000]
+		TestsSiteCount = [1,  2,  3,  5,   10,  20,   30,     100,     /+200,     300,     500, 1_000+/]
 	;
 }
 
@@ -73,9 +87,7 @@ void logic_create() {
 			foreach(var; VariablesArray) {
 				foreach(test; TestsArray) {
 					foreach(siteCount; TestsSiteCount) {
-						foreach(_; 0 .. siteCount) {
-							outputCreateCommand(testId, siteCount, entry, part, var, test);
-						}
+						outputCreateCommand(testId, siteCount, entry, part, var, test);
 					}
 					testId++;
 				}

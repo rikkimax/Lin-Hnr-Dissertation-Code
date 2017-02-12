@@ -22,12 +22,13 @@ void main(string[] args) {
 	string[] benchmarkerToLoad = [ListRouter.RouterName, DumbTreeRouter.RouterName, DumbRegexRouter.RouterName];
 	size_t originalSizeOfBenchmarkerToLoad = benchmarkerToLoad.length;
 
-	uint maxEntries, maxParts, maxVariables, maxTests, benchmarkIterations;
+	uint maxEntries, maxParts, maxVariables, maxTests, benchmarkIterations, benchmarkDataIterations;
 	maxEntries = 1_000_000;
 	maxParts = 20;
 	maxVariables = 8;
 	maxTests = 20;
 	benchmarkIterations = 10;
+	benchmarkDataIterations = 1;
 
 	MmFile[] loadedBenchmarkFiles;
 	CommandSequenceReader!string[] benchmarkFilesCSR;
@@ -51,6 +52,7 @@ void main(string[] args) {
 			"benchmarkMaxParts|bmp", "Benchmark max parts, default: 20", &maxParts,
 			"benchmarkMaxVariables|bmv", "Benchmark max variables, default: 8", &maxVariables,
 			"benchmarkMaxTests|bmt", "Benchmark max tests, default: 20", &maxTests,
+			"benchmarkDataIterations|bmi", "Number of iterations to create benchmark data for, default: 1", &benchmarkDataIterations,
 
 			// benchmarker stuff
 
@@ -131,7 +133,9 @@ void main(string[] args) {
 			writeln(":::::::::::::::::::::::::::::::::::::::::");
 		}
 
-		createAllBenchmarks(benchmarkDirectory, maxEntries, maxParts, maxVariables, maxTests, benchmarkOutput);
+		foreach(i; 0 .. benchmarkDataIterations) {
+			createAllBenchmarks(benchmarkDirectory, maxEntries, maxParts, maxVariables, maxTests, benchmarkOutput);
+		}
 
 		if (verboseMode) {
 			writeln(";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
