@@ -18,8 +18,6 @@ class DumbTreeRouter : IRouter, IRouterOptimizable {
 
 	this() {}
 
-	ulong maximumNumberRoutes() { return ulong.max; }
-
 	void addRoute(Route newRoute) {
 		import std.algorithm : splitter;
 		import std.string : indexOf;

@@ -13,8 +13,6 @@ class DumbRegexRouter : IRouter, IRouterOptimizable {
 	char[] buffer;
 	size_t bufferOffset;
 
-	ulong maximumNumberRoutes() { return ushort.max; }
-
 	void addRoute(Route newRoute) {
 		import std.string : indexOf;
 
@@ -84,9 +82,9 @@ class DumbRegexRouter : IRouter, IRouterOptimizable {
 				theRegex[$-2] = '.';
 				theRegex[$-1] = '*';
 			} else if (part[0] == ':') {
-				bufferOffset += 7;
+				bufferOffset += 5;
 				theRegex = buffer[bufferOffsetStart .. bufferOffset];
-				theRegex[$-7 .. $] = "([^/]+)";
+				theRegex[$-5 .. $] = "[^/]+";
 			} else {
 				bufferOffset += part.length;
 				theRegex = buffer[bufferOffsetStart .. bufferOffset];
@@ -167,7 +165,7 @@ class DumbRegexRouter : IRouter, IRouterOptimizable {
 		if (parent.regex.isNull) {
 			foreach(ref routeE; parent.routes) {
 				// now the path
-				if (matchFirst(routeToFind.path, routeE.regex)) {
+				if (!matchFirst(routeToFind.path, routeE.regex).empty) {
 					if (routeE.route.path[$-1] == '*')
 						lastCatchAll = &routeE.route;
 					else

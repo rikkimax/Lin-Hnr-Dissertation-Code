@@ -24,7 +24,6 @@ interface IConnection {
 interface IRouter {
     void addRoute(Route);
     void preuse();
-	ulong maximumNumberRoutes();
 	Nullable!Route run(RouterRequest, ushort statusCode=200);
 }
 

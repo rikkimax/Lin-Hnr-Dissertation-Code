@@ -47,52 +47,74 @@ struct Benchmarker {
 		}
 
 		void addTests(IRouter router) {
-			if (router.maximumNumberRoutes >= allTestsRealLength) {
-				foreach(test; allTests[0 .. allTestsRealLength]) {
-					router.addRoute(Route(test.website, test.path, test.statuscode, test.requiresSSL));
-				}
+			foreach(test; allTests[0 .. allTestsRealLength]) {
+				router.addRoute(Route(test.website, test.path, test.statuscode, test.requiresSSL));
 			}
 		}
 
-		foreach(router; routerInstances) {
-			addTests(router);
-			router.preuse();
+		foreach(ref router; routerInstances) {
+			try {
+				addTests(router);
+				router.preuse();
+			} catch (Exception e) {
+				router = null;
+			}
 		}
 
-		foreach(router; routerOptimizedInstances) {
-			addTests(router);
-			router.preuse();
-			(cast(IRouterOptimizable)router).preuseOptimize();
+		foreach(ref router; routerOptimizedInstances) {
+			try {
+				addTests(router);
+				router.preuse();
+				(cast(IRouterOptimizable)router).preuseOptimize();
+			} catch (Exception e) {
+				router = null;
+			}
 		}
 	}
 
 	BenchmarkResults perform(uint numberOfIterations) {
+		import std.stdio : writeln;
+
 		BenchmarkResults ret;
 		ret.numberOfTests = allTestsRealLength;
 
 		ret.unoptimized.length = routerInstances.length;
 		ret.optimized.length = routerOptimizedInstances.length;
 
-		size_t i;
-		foreach(uor; routerInstances) {
-			if (uor.maximumNumberRoutes >= allTestsRealLength) {
-				ret.unoptimized[i].name = routerNames[i];
-				ret.unoptimized[i].timeItTook.length = numberOfIterations;
+		foreach(i, uor; routerInstances) {
+			if (verboseMode) {
+				writeln("--------:::::::");
+				writeln("     benchmarking unoptimized ", routerNames[i], " ", uor);
+			}
+
+			ret.unoptimized[i].name = routerNames[i];
+			ret.unoptimized[i].timeItTook.length = numberOfIterations;
+
+			if (uor !is null) {
 				performTest(uor, numberOfIterations, ret.unoptimized[i]);
-				i++;
-			} else
-				ret.unoptimized.length--;
+			}
+
+			if (verboseMode) {
+				writeln("--------;;;;;;;");
+			}
 		}
 
-		i = 0;
-		foreach(or; routerOptimizedInstances) {
-			if (or.maximumNumberRoutes >= allTestsRealLength) {
-				ret.optimized[i].name = routerNamesOptimized[i];
-				ret.optimized[i].timeItTook.length = numberOfIterations;
+		foreach(i, or; routerOptimizedInstances) {
+			if (verboseMode) {
+				writeln("--------:::::::");
+				writeln("     benchmarking optimized ", routerNamesOptimized[i], " ", or);
+			}
+
+			ret.optimized[i].name = routerNamesOptimized[i];
+			ret.optimized[i].timeItTook.length = numberOfIterations;
+
+			if (or !is null) {
 				performTest(or, numberOfIterations, ret.optimized[i]);
-				i++;
-			} else
-				ret.optimized.length--;
+			}
+
+			if (verboseMode) {
+				writeln("--------;;;;;;;");
+			}
 		}
 
 		return ret;
