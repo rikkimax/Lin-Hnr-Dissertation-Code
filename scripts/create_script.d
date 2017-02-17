@@ -57,12 +57,15 @@ void outputCreateCommand(uint testId, uint testSitesId, uint maxEntries, uint ma
 	
 	char[1024] buffer;
 	version(Bash) {
-		output ~= buffer[].sformat("./code --bg --bme %d --bmp %d --bmv %d --bmt %d --bmi %d --bo 
-set_%d_sites_%d.csuf",
-			maxEntries, maxParts, maxVariables, maxTests, testSitesId, testId, testSitesId);
+		output ~= buffer[].sformat("./code --bg --bme %d --bmp %d --bmv %d --bmt %d --bmi %d --bo set_%d_sites_%d.csuf --brom set_%d_sites_%d_result.csv --broa mean.csv",
+			maxEntries, maxParts, maxVariables, maxTests, testSitesId,
+			testId, testSitesId,
+			testId, testSitesId);
 	} else version(Batch) {
-		output ~= buffer[].sformat("code --bg --bme %d --bmp %d --bmv %d --bmt %d --bmi %d --bo set_%d_sites_%d.csuf",
-			maxEntries, maxParts, maxVariables, maxTests, testSitesId, testId, testSitesId);
+		output ~= buffer[].sformat("code --bg --bme %d --bmp %d --bmv %d --bmt %d --bmi %d --bo set_%d_sites_%d.csuf --brom set_%d_sites_%d_result.csv --broa mean.csv",
+			maxEntries, maxParts, maxVariables, maxTests, testSitesId,
+			testId, testSitesId,
+			testId, testSitesId);
 
 	}
 	output ~= '\n';
@@ -70,11 +73,17 @@ set_%d_sites_%d.csuf",
 
 static {
 	uint[]
-		EntriesArray   = [10, 20, 50, 100, 200, 1000, 10_000, 100_000/+, 200_000, 1_000_000+/],
+		EntriesArray   = [10],
+		PartsArray     = [5],
+		VariablesArray = [4],
+		TestsArray     = [4],
+		TestsSiteCount = [1]
+	
+		/+EntriesArray   = [10, 20, 50, 100, 200, 1000, 10_000, 100_000/+, 200_000, 1_000_000+/],
 		PartsArray     = [5,  10, 20, 30],
 		VariablesArray = [4,  10, 20],
 		TestsArray     = [4,  10, 20],
-		TestsSiteCount = [1,  2,  3,  5,   10,  20,   30,     100,     /+200,     300,     500, 1_000+/]
+		TestsSiteCount = [1,  2,  3,  5,   10,  20,   30,     100,   /+200,     300,     500, 1_000+/]+/
 	;
 }
 
