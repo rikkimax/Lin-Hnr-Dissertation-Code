@@ -6,7 +6,26 @@
 	"description": "A minimal D application.",
 	"copyright": "Copyright © 2016, rikki",
 	"license": "proprietary",
-	"dependencies": {
-		"csuf": "~>0.2.4"
-	}
+
+        "subPackages": [
+		{
+			"name": "data",
+			"targetType": "executable",
+			"sourceFiles": ["entry_points/data.d"],
+
+			"dependencies": {
+				"csuf": "~>0.2.4"
+			},
+		},
+
+		{
+			"name": "graph",
+			"targetType": "executable",
+			"sourceFiles": ["entry_points/graph.d"],
+
+			"dependencies": {
+				"csuf": "~>0.2.4"
+			},
+		}
+	]
 }

@@ -57,12 +57,12 @@ void outputCreateCommand(uint testId, uint testSitesId, uint maxEntries, uint ma
 	
 	char[1024] buffer;
 	version(Bash) {
-		output ~= buffer[].sformat("./code --bg --bme %d --bmp %d --bmv %d --bmt %d --bmi %d --bo set_%d_sites_%d.csuf --brom set_%d_sites_%d_result.csv --broa mean.csv",
+		output ~= buffer[].sformat("./data --bg --bme %d --bmp %d --bmv %d --bmt %d --bmi %d --bo set_%d_sites_%d.csuf --brom set_%d_sites_%d_result.csv --broa mean.csv",
 			maxEntries, maxParts, maxVariables, maxTests, testSitesId,
 			testId, testSitesId,
 			testId, testSitesId);
 	} else version(Batch) {
-		output ~= buffer[].sformat("code --bg --bme %d --bmp %d --bmv %d --bmt %d --bmi %d --bo set_%d_sites_%d.csuf --brom set_%d_sites_%d_result.csv --broa mean.csv",
+		output ~= buffer[].sformat("data --bg --bme %d --bmp %d --bmv %d --bmt %d --bmi %d --bo set_%d_sites_%d.csuf --brom set_%d_sites_%d_result.csv --broa mean.csv",
 			maxEntries, maxParts, maxVariables, maxTests, testSitesId,
 			testId, testSitesId,
 			testId, testSitesId);

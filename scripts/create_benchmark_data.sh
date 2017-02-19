@@ -6,7 +6,8 @@ mkdir benchmarks
 
 # ok lets build the damn program!
 
-dub build --build=release
+dub build :data --build=release
+dub build :graph --build=release
 
 # and now the data creation
 
