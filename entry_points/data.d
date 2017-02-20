@@ -6,21 +6,21 @@ import webrouters.list : ListRouter;
 import webrouters.dumbtree : DumbTreeRouter;
 import webrouters.regex : DumbRegexRouter;
 import csuf.reader;
+import std.path : dirName, baseName, rootName, buildPath;
 
 void main(string[] args) {
 	import std.getopt;
 	import std.file : exists, isDir, isFile, mkdirRecurse, remove, dirEntries, SpanMode, append, write;
 	import std.algorithm : uniq;
-	import std.path : dirName, baseName, rootName;
 	import std.mmfile;
-	import std.format : sformat;
+	import std.format : format, sformat;
 	import std.array : appender;
 	
 	bool generateBenchmarks, runBenchmark;
 	string benchmarkDirectory = "benchmarks";
 	string[] benchmarkLoad = ["benchmarks/*.csuf"];
 	string[] benchmarkOutput;
-	string benchmarkOutputMean, benchmarkOutputAll;
+	string benchmarkOutputMean, benchmarkOutputAll, benchmarkAppendTitle;
 	
 	string[] benchmarkerToLoad = [ListRouter.RouterName, DumbTreeRouter.RouterName, DumbRegexRouter.RouterName];
 	size_t originalSizeOfBenchmarkerToLoad = benchmarkerToLoad.length;
@@ -56,7 +56,8 @@ void main(string[] args) {
 			"benchmarkMaxVariables|bmv", "Benchmark max variables, default: 8", &maxVariables,
 			"benchmarkMaxTests|bmt", "Benchmark max tests, default: 20", &maxTests,
 			"benchmarkDataIterations|bmi", "Number of iterations to create benchmark data for, default: 1", &benchmarkDataIterations,
-			
+			"benchmarkTitleAppend|bma", "Append title of benchmark test set", &benchmarkAppendTitle,
+
 			// benchmarker stuff
 			
 			"run", "Runs the benchmark", &runBenchmark,
@@ -129,7 +130,24 @@ void main(string[] args) {
 			/+if (exists(benchmarkOutputMean))
 			 write(benchmarkOutputMean, "\n");+/
 		}
-		
+
+
+		if (benchmarkAppendTitle !is null) {
+			string benchmarkAppendTitleBase = rootName(benchmarkAppendTitle);
+			if (exists(benchmarkAppendTitleBase)) {
+				if (isDir(benchmarkAppendTitleBase)) {
+				} else {
+					remove(benchmarkAppendTitleBase);
+					mkdirRecurse(benchmarkAppendTitleBase);
+				}
+			} else {
+				mkdirRecurse(benchmarkAppendTitleBase);
+			}
+			
+			/+if (exists(benchmarkAppendTitle))
+			 write(benchmarkAppendTitle, "\n");+/
+		}
+
 	} catch (Exception e) {
 		writeln("Failed to cleanup/create the benchmark+output directory.");
 		
@@ -171,7 +189,11 @@ void main(string[] args) {
 			writeln(":         Benchmark generation          :");
 			writeln(":::::::::::::::::::::::::::::::::::::::::");
 		}
-		
+
+		if (benchmarkAppendTitle !is null) {
+			append(buildPath(benchmarkDirectory, benchmarkAppendTitle), format("%s\tMax (Entries %d Parts %d Variables %d Tests %d)\n", benchmarkOutputAll, maxEntries, maxParts, maxVariables, maxTests));
+		}
+
 		foreach(i; 0 .. benchmarkDataIterations) {
 			createAllBenchmarks(benchmarkDirectory, maxEntries, maxParts, maxVariables, maxTests, benchmarkOutput);
 		}
@@ -305,7 +327,7 @@ void main(string[] args) {
 		
 		auto meanAppender = appender!string();
 		auto allAppender = appender!string();
-		
+
 		if (benchmarkOutputMean !is null) {
 			foreach(ref ur; results.unoptimized) {
 				long t1 = ur.average.total!"usecs";
@@ -320,7 +342,7 @@ void main(string[] args) {
 			}
 
 			meanAppender ~= '\n';
-			append(benchmarkOutputMean, meanAppender.data);
+			append(buildPath(benchmarkDirectory, benchmarkOutputMean), meanAppender.data);
 		}
 		
 		if (benchmarkOutputAll !is null) {
@@ -342,7 +364,7 @@ void main(string[] args) {
 				allAppender ~= '\n';
 			}
 
-			append(benchmarkOutputAll, allAppender.data);
+			append(buildPath(benchmarkDirectory, benchmarkOutputAll), allAppender.data);
 		}
 		
 		if (verboseMode) {
@@ -355,18 +377,17 @@ void main(string[] args) {
 
 void createAllBenchmarks(string directory, uint maxEntries, uint maxParts, uint maxVariables, uint maxTests, string[] benchmarkOutput) {
 	import core.memory : GC;
-	import std.path : buildPath;
 	
 	foreach(i, dst; benchmarkOutput) {
 		import std.stdio;
 		
-		dst = directory.buildPath(dst);
+		dst = buildPath(directory, dst);
 		
 		if (verboseMode) {
 			writeln(i, ": filename(\"", dst, "\")");
 		}
 		
-		createAndStoreBenchmark(dst, 1_000_000, 20, 8, 20);
+		createAndStoreBenchmark(dst, maxEntries, maxParts, maxVariables, maxTests);
 		
 		// Do you like OOM errors? Because I certainly don't...
 		// this doesn't exactly fix the issue,
@@ -408,7 +429,7 @@ string createBenchmarkCSUF(BenchMarkItems benchmark) {
 			countTotalEntries++;
 		}
 	}
-	
+
 	lastWebsite = null;
 	foreach(i, item; benchmark.items) {
 		if (lastWebsite !is item.route.website || i == 0) {
