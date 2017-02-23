@@ -16,11 +16,10 @@ void main(string[] args) {
 	import std.format : format, sformat;
 	import std.array : appender;
 	
-	bool generateBenchmarks, runBenchmark;
+	bool generateBenchmarks;
 	string benchmarkDirectory = "benchmarks";
 	string[] benchmarkLoad = ["benchmarks/*.csuf"];
-	string[] benchmarkOutput;
-	string benchmarkOutputMean, benchmarkOutputAll, benchmarkAppendTitle;
+	string benchmarkOutputMean, benchmarkOutputAll, benchmarkAppendTitle, runBenchmark, benchmarkOutput;
 	
 	string[] benchmarkerToLoad = [ListRouter.RouterName, DumbTreeRouter.RouterName, DumbRegexRouter.RouterName];
 	size_t originalSizeOfBenchmarkerToLoad = benchmarkerToLoad.length;
@@ -46,7 +45,7 @@ void main(string[] args) {
 			// generic stuff
 			
 			"benchmarkDirectory|bd", "Benchmark directory, default: ./benchmarks", &benchmarkDirectory,
-			"benchmarkOutput|bo", "Output benchmark files, appends only", &benchmarkOutput,
+			"benchmarkOutput|bo", "Output benchmark file, appends only", &benchmarkOutput,
 			
 			// benchmark generatior stuff
 			
@@ -60,8 +59,7 @@ void main(string[] args) {
 
 			// benchmarker stuff
 			
-			"run", "Runs the benchmark", &runBenchmark,
-			"load", "Load a benchmark file, is a glob, default: benchmarks/*.csuf", &benchmarkLoad,
+			"run", "Runs the benchmark and load file", &runBenchmark,
 			"benchmarkLoad|brl", "Adds a router implementation to benchmark, default: all", &benchmarkerToLoad,
 			"benchmarkIterations|bri", "Number of iterations to run benchmark for, default: 10", &benchmarkIterations,
 			"benchmarkOutputMean|brom", "Output benchmark results mean", &benchmarkOutputMean,
@@ -111,8 +109,8 @@ void main(string[] args) {
 				mkdirRecurse(benchmarkOutputAllBase);
 			}
 			
-			/+if (exists(benchmarkOutputAll))
-			 write(benchmarkOutputAll, "\n");+/
+			if (exists(benchmarkOutputAll))
+				write(benchmarkOutputMean, "_ (UA)List (UI)List (UA)Tree (UI)Tree (UA)Regex (UI)Regex (OA)List (OI)List (OA)Tree (OI)Tree (OA)Regex (OI)Regex\n");
 		}
 		
 		if (benchmarkOutputMean !is null) {
@@ -127,8 +125,8 @@ void main(string[] args) {
 				mkdirRecurse(benchmarkOutputMeanBase);
 			}
 			
-			/+if (exists(benchmarkOutputMean))
-			 write(benchmarkOutputMean, "\n");+/
+			if (exists(benchmarkOutputMean))
+				write(benchmarkOutputMean, "_ (UA)List (UI)List (UA)Tree (UI)Tree (UA)Regex (UI)Regex (OA)List (OI)List (OA)Tree (OI)Tree (OA)Regex (OI)Regex\n");
 		}
 
 
@@ -190,8 +188,8 @@ void main(string[] args) {
 			writeln(":::::::::::::::::::::::::::::::::::::::::");
 		}
 
-		if (benchmarkAppendTitle !is null) {
-			append(buildPath(benchmarkDirectory, benchmarkAppendTitle), format("%s\tMax (Entries %d Parts %d Variables %d Tests %d)\n", benchmarkOutputAll, maxEntries, maxParts, maxVariables, maxTests));
+		if (benchmarkAppendTitle !is null && !exists(buildPath(benchmarkDirectory, benchmarkOutput))) {
+			append(buildPath(benchmarkDirectory, benchmarkAppendTitle), format("%s\tMax (Entries %d Parts %d Variables %d Tests %d)\n", benchmarkOutput, maxEntries, maxParts, maxVariables, maxTests));
 		}
 
 		foreach(i; 0 .. benchmarkDataIterations) {
@@ -205,66 +203,55 @@ void main(string[] args) {
 		}
 	}
 	
-	if (runBenchmark) {
+	if (runBenchmark !is null) {
 		if (verboseMode) {
 			writeln(":::::::::::::::::::::::::::::::::::::::::");
 			writeln(":           Benchmark runner            :");
 			writeln(":::::::::::::::::::::::::::::::::::::::::");
 		}
 		
-		if (benchmarkLoad.length > 1) {
-			// remove the default if its overidden
-			benchmarkLoad = benchmarkLoad[1 .. $];
-		}
+		loadedBenchmarkFiles.length = 1;
+		benchmarkFilesCSR.length = 1;
 		
-		uint countFilesToLoad, currentFileToLoad;
-		foreach(toload; benchmarkLoad.uniq) {
-			foreach(file; dirEntries(dirName(toload), baseName(toload), SpanMode.depth)) {
-				countFilesToLoad++;
+		string toload = runBenchmark;
+		size_t currentFileToLoad;
+
+		foreach(string file; dirEntries(dirName(toload), baseName(toload), SpanMode.depth)) {
+			if (verboseMode) {
+				writeln("-----:::::::");
+				writeln("     loading ", file);
 			}
-		}
-		
-		loadedBenchmarkFiles.length = countFilesToLoad;
-		benchmarkFilesCSR.length = countFilesToLoad;
-		
-		foreach(toload; benchmarkLoad.uniq) {
-			foreach(string file; dirEntries(dirName(toload), baseName(toload), SpanMode.depth)) {
-				if (verboseMode) {
-					writeln("-----:::::::");
-					writeln("     loading ", file);
+			
+			if (isFile(file)) {
+				// load the files via memory mapping
+				
+				auto mmfile = new MmFile(file, MmFile.Mode.read, 0, null);
+				
+				if (currentFileToLoad == loadedBenchmarkFiles.length) {
+					loadedBenchmarkFiles.length++;
+					benchmarkFilesCSR.length++;
 				}
 				
-				if (isFile(file)) {
-					// load the files via memory mapping
-					
-					auto mmfile = new MmFile(file, MmFile.Mode.read, 0, null);
-					
-					if (currentFileToLoad == loadedBenchmarkFiles.length) {
-						loadedBenchmarkFiles.length++;
-						benchmarkFilesCSR.length++;
-					}
-					
-					loadedBenchmarkFiles[currentFileToLoad] = mmfile;
-					benchmarkFilesCSR[currentFileToLoad] = CommandSequenceReader!string(cast(string)mmfile[]);
-					
-					// ugh do we need to do anything further?
-					version(none) {
-						auto csr = &benchmarkFilesCSR[currentFileToLoad];
-					}
-					
-					// probably not at this point
-					// we'd need to figure out the routers first
-					// although setting up all the e.g. websites and routes would be a good thing...
-				} else {
-					if (verboseMode) {
-						writeln("     Not a file, ignoring");
-					}
+				loadedBenchmarkFiles[currentFileToLoad] = mmfile;
+				benchmarkFilesCSR[currentFileToLoad] = CommandSequenceReader!string(cast(string)mmfile[]);
+				
+				// ugh do we need to do anything further?
+				version(none) {
+					auto csr = &benchmarkFilesCSR[currentFileToLoad];
 				}
 				
-				currentFileToLoad++;
+				// probably not at this point
+				// we'd need to figure out the routers first
+				// although setting up all the e.g. websites and routes would be a good thing...
+			} else {
 				if (verboseMode) {
-					writeln("-----;;;;;;;");
+					writeln("     Not a file, ignoring");
 				}
+			}
+			
+			currentFileToLoad++;
+			if (verboseMode) {
+				writeln("-----;;;;;;;");
 			}
 		}
 		
@@ -329,6 +316,9 @@ void main(string[] args) {
 		auto allAppender = appender!string();
 
 		if (benchmarkOutputMean !is null) {
+			meanAppender ~= runBenchmark;
+			meanAppender ~= " ";
+
 			foreach(ref ur; results.unoptimized) {
 				long t1 = ur.average.total!"usecs";
 				long t2 = (ur.average / results.numberOfTests).total!"usecs";
@@ -346,6 +336,9 @@ void main(string[] args) {
 		}
 		
 		if (benchmarkOutputAll !is null) {
+			meanAppender ~= runBenchmark;
+			meanAppender ~= " ";
+
 			foreach(i; 0 .. benchmarkIterations) {
 				foreach(ref ur; results.unoptimized) {
 					auto diff = ur.timeItTook[i];
@@ -375,26 +368,23 @@ void main(string[] args) {
 	}
 }
 
-void createAllBenchmarks(string directory, uint maxEntries, uint maxParts, uint maxVariables, uint maxTests, string[] benchmarkOutput) {
+void createAllBenchmarks(string directory, uint maxEntries, uint maxParts, uint maxVariables, uint maxTests, string benchmarkOutput) {
 	import core.memory : GC;
+	import std.stdio;
 	
-	foreach(i, dst; benchmarkOutput) {
-		import std.stdio;
-		
-		dst = buildPath(directory, dst);
-		
-		if (verboseMode) {
-			writeln(i, ": filename(\"", dst, "\")");
-		}
-		
-		createAndStoreBenchmark(dst, maxEntries, maxParts, maxVariables, maxTests);
-		
-		// Do you like OOM errors? Because I certainly don't...
-		// this doesn't exactly fix the issue,
-		// but for middle sized data sets with in use by lower teir processors (32bit/low RAM)
-		// it can help greatly.
-		GC.collect;
+	benchmarkOutput = buildPath(directory, benchmarkOutput);
+	
+	if (verboseMode) {
+		writeln("filename(\"", benchmarkOutput, "\")");
 	}
+	
+	createAndStoreBenchmark(benchmarkOutput, maxEntries, maxParts, maxVariables, maxTests);
+	
+	// Do you like OOM errors? Because I certainly don't...
+	// this doesn't exactly fix the issue,
+	// but for middle sized data sets with in use by lower teir processors (32bit/low RAM)
+	// it can help greatly.
+	GC.collect;
 }
 
 void createAndStoreBenchmark(string filename, uint maxEntries, uint maxParts, uint maxVariables, uint maxTests) {
