@@ -13,5 +13,6 @@ dub build :graph --build=release
 
 ./scripts/create.sh
 ./scripts/run.sh
+./graph
 
 popd
