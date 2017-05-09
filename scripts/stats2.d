@@ -92,7 +92,11 @@ void main() {
 
 	output ~= "above(listA) above(listI) above(treeA) above(treeI) ";
 	output ~= "above(regexA) above(regexI) above(treeOA) above(treeOI) ";
-	output ~= "above(regexOA) above(regexOI)\n";
+	output ~= "above(regexOA) above(regexOI) ";
+	
+	output ~= "atmean(listA) atmean(listI) atmean(treeA) atmean(treeI) ";
+	output ~= "atmean(regexA) atmean(regexI) atmean(treeOA) atmean(treeOI) ";
+	output ~= "atmean(regexOA) atmean(regexOI)\n";
 
 	Entry[] means = parseFile("../benchmarks/mean.csv");
 	size_t meanEntry;
@@ -113,18 +117,18 @@ void main() {
 			if (entries.length <= 1)
 				continue;			
 
-			Entry below, above;
+			Entry below, above, atmean;
 			foreach(ref v; entries) {
-				handleData!"listA"(v, below, above, mean);
-				handleData!"listI"(v, below, above, mean);
-				handleData!"treeA"(v, below, above, mean);
-				handleData!"treeI"(v, below, above, mean);
-				handleData!"regexA"(v, below, above, mean);
-				handleData!"regexI"(v, below, above, mean);
-				handleData!"treeOA"(v, below, above, mean);
-				handleData!"treeOI"(v, below, above, mean);
-				handleData!"regexOA"(v, below, above, mean);
-				handleData!"regexOI"(v, below, above, mean);
+				handleData!"listA"(v, below, above, atmean, mean);
+				handleData!"listI"(v, below, above, atmean, mean);
+				handleData!"treeA"(v, below, above, atmean, mean);
+				handleData!"treeI"(v, below, above, atmean, mean);
+				handleData!"regexA"(v, below, above, atmean, mean);
+				handleData!"regexI"(v, below, above, atmean, mean);
+				handleData!"treeOA"(v, below, above, atmean, mean);
+				handleData!"treeOI"(v, below, above, atmean, mean);
+				handleData!"regexOA"(v, below, above, atmean, mean);
+				handleData!"regexOI"(v, below, above, atmean, mean);
 			}
 
 			import std.format : formattedWrite;
@@ -134,10 +138,15 @@ void main() {
 				below.listA, below.listI, below.treeA, below.treeI,
 				below.regexA, below.regexI, below.treeOA, below.treeOI,
 				below.regexOA, below.regexOI);
-			output.formattedWrite("%d %d %d %d %d %d %d %d %d %d\n",
+			output.formattedWrite("%d %d %d %d %d %d %d %d %d %d ",
 				above.listA, above.listI, above.treeA, above.treeI,
 				above.regexA, above.regexI, above.treeOA, above.treeOI,
 				above.regexOA, above.regexOI);
+				
+			output.formattedWrite("%d %d %d %d %d %d %d %d %d %d\n",
+				atmean.listA, atmean.listI, atmean.treeA, atmean.treeI,
+				atmean.regexA, atmean.regexI, atmean.treeOA, atmean.treeOI,
+				atmean.regexOA, atmean.regexOI);
 //		}
 
 			meanEntry++;
@@ -148,15 +157,24 @@ void main() {
 	write("../abovebelow.csv", output.data);
 }
 
-void handleData(string member)(ref Entry entry, ref Entry below, ref Entry above, ref Entry mean) {
+void handleData(string member)(ref Entry entry, ref Entry below, ref Entry above, ref Entry atmean, ref Entry mean) {
 	enum E = "entry." ~ member;
 	enum M = "mean." ~ member;
 	enum I = "below." ~ member;
 	enum A = "above." ~ member;
+	enum T = "atmean." ~ member;
 	
 	if (mixin(M) > mixin(E)) {
 		mixin(I)++;
-	} else if (mixin(M) < mixin(E)) {
+	}
+	
+	if (mixin(M) < mixin(E)) {
 		mixin(A)++;
+	}
+	
+	auto minT = mixin(M) > 5 ? mixin(M) -5 : 0;
+	auto maxT = mixin(M) < ulong.max ? mixin(M) +5 : ulong.max;
+	if (mixin(E) >= minT && mixin(E) <= maxT) {
+		mixin(T)++;
 	}
 }
